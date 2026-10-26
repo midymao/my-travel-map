@@ -1,0 +1,18 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const places = await getCollection('places');
+  return places.map((place) => ({ params: { id: place.id }, props: { place } }));
+}
+
+const { place } = Astro.props;
+const { Content } = await render(place);
+---
+<Base title={`${place.data.title} · 我的旅行地图`} description={place.data.summary}>
+  <a href="/places/" style="color:#9ecbff">← 所有地点</a>
+  <h1>{place.data.title}</h1>
+  <p style="opacity:.6">{place.data.country}{place.data.date ? ` · ${place.data.date}` : ''}</p>
+  <Content />
+</Base>

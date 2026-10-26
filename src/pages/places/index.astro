@@ -1,0 +1,22 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const places = (await getCollection('places')).sort((a, b) =>
+  (b.data.date ?? '').localeCompare(a.data.date ?? '')
+);
+---
+<Base title="地点 · 我的旅行地图">
+  <h1>地点</h1>
+  <ul style="list-style:none;padding:0">
+    {places.map((p) => (
+      <li style="border-top:1px solid #333;padding:1.2rem 0">
+        <a href={`/places/${p.id}/`} style="color:inherit;text-decoration:none">
+          <strong style="font-size:1.4rem">{p.data.title}</strong>
+          <span style="opacity:.6"> · {p.data.country}{p.data.date ? ` · ${p.data.date}` : ''}</span>
+          <p style="opacity:.7;margin:.4rem 0 0">{p.data.summary}</p>
+        </a>
+      </li>
+    ))}
+  </ul>
+</Base>
