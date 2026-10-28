@@ -1,0 +1,270 @@
+---
+import { geoNaturalEarth1, geoPath } from "d3-geo";
+import { feature } from "topojson-client";
+import world from "world-atlas/countries-110m.json";
+import { getCollection } from "astro:content";
+import { numericByAlpha2 } from "../data/countries";
+
+const W = 1000;
+const H = 500;
+
+const places = (await getCollection("places")).sort(
+  (a, b) => (a.data.order ?? 0) - (b.data.order ?? 0),
+);
+
+for (const p of places) {
+  if (!numericByAlpha2[p.data.countryCode]) {
+    console.warn(
+      `[WorldMap] 缺少国家代码映射：${p.data.countryCode}（${p.data.title}）`,
+    );
+  }
+}
+
+const projection = geoNaturalEarth1().fitSize([W, H], { type: "Sphere" });
+const path = geoPath(projection);
+
+const visited = places.filter((p) => p.data.status === "visited");
+const visitedIds = new Set(
+  visited.map((p) => numericByAlpha2[p.data.countryCode]),
+);
+const countryCount = new Set(visited.map((p) => p.data.countryCode)).size;
+
+const countries = feature(world, world.objects.countries).features.map((f) => ({
+  d: path(f),
+  visited: visitedIds.has(Number(f.id)),
+}));
+const outline = path({ type: "Sphere" });
+
+const pins = places.map((p) => {
+  const [lat, lng] = p.data.coords;
+  const [x, y] = projection([lng, lat]);
+  return {
+    id: p.id,
+    x: (x / W) * 100,
+    y: (y / H) * 100,
+    title: p.data.title,
+    country: p.data.country,
+    date: p.data.date ?? "",
+    summary: p.data.summary,
+    href: `/places/${p.id}/`,
+    planned: p.data.status === "planned",
+  };
+});
+---
+
+<section class="worldmap" data-worldmap>
+  <p class="stats">{countryCount} 个国家 · {places.length} 个地点</p>
+
+  <div class="stage">
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label="世界地图，去过的国家被点亮"
+    >
+      <path class="sphere" d={outline}></path>
+      {
+        countries.map((c) => (
+          <path class={c.visited ? "country visited" : "country"} d={c.d} />
+        ))
+      }
+    </svg>
+    {
+      pins.map((p) => (
+        <button
+          class={p.planned ? "pin planned" : "pin"}
+          style={`left:${p.x}%;top:${p.y}%`}
+          data-id={p.id}
+          data-title={p.title}
+          data-country={p.country}
+          data-date={p.date}
+          data-summary={p.summary}
+          data-href={p.href}
+          aria-label={`${p.title}，${p.country}`}
+        >
+          <span />
+        </button>
+      ))
+    }
+  </div>
+
+  <ul class="chips">
+    {
+      pins.map((p) => (
+        <li>
+          <button class="chip" data-id={p.id}>
+            {p.title}
+          </button>
+        </li>
+      ))
+    }
+  </ul>
+
+  <aside class="card" aria-live="polite">
+    <p data-card-hint class="hint">点一下地图上的圆点，或者上面的地点名。</p>
+    <div data-card-body hidden>
+      <h3 data-card-title></h3>
+      <p data-card-meta class="meta"></p>
+      <p data-card-summary></p>
+      <a data-card-link href="#">查看这座城市 →</a>
+    </div>
+  </aside>
+</section>
+
+<style>
+  .stats {
+    margin: 0 0 1rem;
+    opacity: 0.6;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+  }
+  .stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2 / 1;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .sphere {
+    fill: #0a0c0f;
+    stroke: #1b222a;
+    stroke-width: 1;
+  }
+  .country {
+    fill: #171c22;
+    stroke: #0a0c0f;
+    stroke-width: 0.5;
+  }
+  .country.visited {
+    fill: #24557f;
+    stroke: #3a76a8;
+  }
+
+  .pin {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .pin span {
+    display: block;
+    width: 8px;
+    height: 8px;
+    margin: 8px;
+    border-radius: 50%;
+    background: #d9f5ff;
+    box-shadow:
+      0 0 0 3px rgba(217, 245, 255, 0.18),
+      0 0 12px rgba(217, 245, 255, 0.6);
+    transition: transform 0.2s;
+  }
+  .pin.planned span {
+    background: #ffb340;
+    box-shadow:
+      0 0 0 3px rgba(255, 179, 64, 0.2),
+      0 0 12px rgba(255, 179, 64, 0.6);
+  }
+  .pin:hover span,
+  .pin.active span {
+    transform: scale(1.6);
+  }
+  .pin:focus-visible {
+    outline: 2px solid #fff;
+    border-radius: 50%;
+  }
+  @media (pointer: coarse) {
+    .pin {
+      width: 34px;
+      height: 34px;
+      margin: -17px 0 0 -17px;
+    }
+    .pin span {
+      margin: 13px;
+    }
+  }
+
+  .chips {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0;
+    margin: 1.2rem 0;
+  }
+  .chip {
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    cursor: pointer;
+    border: 1px solid #333;
+    background: transparent;
+    color: #cfd4da;
+    font: inherit;
+  }
+  .chip:hover,
+  .chip.active {
+    border-color: #d9f5ff;
+    color: #fff;
+  }
+
+  .card {
+    border: 1px solid #262b31;
+    border-radius: 16px;
+    padding: 1.2rem 1.4rem;
+    background: #0d1014;
+    min-height: 7rem;
+  }
+  .card h3 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+  .card .meta {
+    margin: 0.3rem 0 0.8rem;
+    opacity: 0.6;
+  }
+  .card .hint {
+    margin: 0;
+    opacity: 0.5;
+  }
+  .card a {
+    color: #9ecbff;
+  }
+</style>
+
+<script>
+  const root = document.querySelector("[data-worldmap]");
+  if (root) {
+    const hint = root.querySelector("[data-card-hint]");
+    const body = root.querySelector("[data-card-body]");
+    const titleEl = root.querySelector("[data-card-title]");
+    const metaEl = root.querySelector("[data-card-meta]");
+    const summaryEl = root.querySelector("[data-card-summary]");
+    const linkEl = root.querySelector("[data-card-link]");
+    const triggers = root.querySelectorAll("[data-id]");
+
+    function select(id) {
+      const pin = root.querySelector(`.pin[data-id="${id}"]`);
+      if (!pin) return;
+      triggers.forEach((el) =>
+        el.classList.toggle("active", el.dataset.id === id),
+      );
+      titleEl.textContent = pin.dataset.title;
+      metaEl.textContent = [pin.dataset.country, pin.dataset.date]
+        .filter(Boolean)
+        .join(" · ");
+      summaryEl.textContent = pin.dataset.summary;
+      linkEl.setAttribute("href", pin.dataset.href);
+      hint.hidden = true;
+      body.hidden = false;
+    }
+
+    triggers.forEach((el) =>
+      el.addEventListener("click", () => select(el.dataset.id)),
+    );
+  }
+</script>

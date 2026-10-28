@@ -1,8 +1,13 @@
 ---
-import Base from '../layouts/Base.astro';
+import Base from "../layouts/Base.astro";
+import WorldMap from "../components/WorldMap.astro";
 ---
-<Base title="我的旅行地图">
+
+<Base title="我的旅行地图" description="一张世界地图，记录我去过的地方。">
   <h1>我的旅行地图</h1>
-  <p>网站建设中。</p>
-  <p><a href="/places/" style="color:#9ecbff">查看所有地点 →</a></p>
+  <p style="opacity:.7">点亮的国家是去过的地方，点一下圆点看详情。</p>
+  <WorldMap />
+  <p style="margin-top:2rem">
+    <a href="/places/" style="color:#9ecbff">按列表浏览所有地点 →</a>
+  </p>
 </Base>
