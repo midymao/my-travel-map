@@ -14,6 +14,8 @@ const places = defineCollection({
     status: z.enum(["visited", "planned"]).default("visited"),
     summary: z.string(), // 一句话感受
     trip: z.string().optional(), // 所属旅程，后面画路线用
+        trip: z.string().optional(),                // 所属旅程，后面画路线用
+    order: z.number().optional(),               // 时间先后序号，数字越大越新
   }),
 });
 
