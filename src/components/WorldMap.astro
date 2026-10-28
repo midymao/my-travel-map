@@ -20,7 +20,9 @@ for (const p of places) {
   }
 }
 
-const projection = geoNaturalEarth1().fitSize([W, H], { type: "Sphere" });
+const projection = geoNaturalEarth1()
+  .rotate([-10, 0])
+  .fitSize([W, H], { type: "Sphere" });
 const path = geoPath(projection);
 
 const visited = places.filter((p) => p.data.status === "visited");
@@ -167,14 +169,12 @@ const pins = places.map((p) => {
   .sphere {
     fill: #0a0c0f;
     stroke: #1b222a;
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
+    stroke-width: calc(1px / var(--k));
   }
   .country {
     fill: #171c22;
     stroke: #0a0c0f;
-    stroke-width: 0.6;
-    vector-effect: non-scaling-stroke;
+    stroke-width: calc(0.6px / var(--k));
   }
   .country.visited {
     fill: #24557f;
@@ -348,10 +348,13 @@ const pins = places.map((p) => {
       const w = stage.clientWidth;
       const h = stage.clientHeight;
       const k = Math.min(MAX_K, Math.max(MIN_K, v.k));
+      // 放大后允许多拖出一点边，方便把靠近地图边缘的地点（如斐济）拉到中间
+      const mx = 0.5 * w * (1 - 1 / k);
+      const my = 0.5 * h * (1 - 1 / k);
       return {
         k,
-        tx: Math.min(0, Math.max(w - w * k, v.tx)),
-        ty: Math.min(0, Math.max(h - h * k, v.ty)),
+        tx: Math.min(mx, Math.max(w - w * k - mx, v.tx)),
+        ty: Math.min(my, Math.max(h - h * k - my, v.ty)),
       };
     }
 
