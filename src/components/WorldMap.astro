@@ -55,43 +55,58 @@ const pins = places.map((p) => {
 <section class="worldmap" data-worldmap>
   <p class="stats">{countryCount} 个国家 · {places.length} 个地点</p>
 
-  <div class="stage">
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      role="img"
-      aria-label="世界地图，去过的国家被点亮"
-    >
-      <path class="sphere" d={outline}></path>
+  <div class="stage" data-stage>
+    <div class="layer" data-layer>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label="世界地图，去过的国家被点亮"
+      >
+        <path class="sphere" d={outline}></path>
+        {
+          countries.map((c) => (
+            <path class={c.visited ? "country visited" : "country"} d={c.d} />
+          ))
+        }
+      </svg>
       {
-        countries.map((c) => (
-          <path class={c.visited ? "country visited" : "country"} d={c.d} />
+        pins.map((p) => (
+          <button
+            type="button"
+            class={p.planned ? "pin planned" : "pin"}
+            style={`left:${p.x}%;top:${p.y}%`}
+            data-id={p.id}
+            data-x={p.x}
+            data-y={p.y}
+            data-title={p.title}
+            data-country={p.country}
+            data-date={p.date}
+            data-summary={p.summary}
+            data-href={p.href}
+            aria-label={`${p.title}，${p.country}`}
+          >
+            <span />
+          </button>
         ))
       }
-    </svg>
-    {
-      pins.map((p) => (
-        <button
-          class={p.planned ? "pin planned" : "pin"}
-          style={`left:${p.x}%;top:${p.y}%`}
-          data-id={p.id}
-          data-title={p.title}
-          data-country={p.country}
-          data-date={p.date}
-          data-summary={p.summary}
-          data-href={p.href}
-          aria-label={`${p.title}，${p.country}`}
-        >
-          <span />
-        </button>
-      ))
-    }
+    </div>
+
+    <div class="controls">
+      <button type="button" data-zoom-in aria-label="放大">+</button>
+      <button type="button" data-zoom-out aria-label="缩小">−</button>
+      <button type="button" data-zoom-reset aria-label="还原视图">⤢</button>
+    </div>
+    <p class="zoomhint">
+      <span class="mouse">Ctrl + 滚轮缩放，拖动平移</span>
+      <span class="touch">双指缩放，拖动平移</span>
+    </p>
   </div>
 
   <ul class="chips">
     {
       pins.map((p) => (
         <li>
-          <button class="chip" data-id={p.id}>
+          <button type="button" class="chip" data-id={p.id}>
             {p.title}
           </button>
         </li>
@@ -117,10 +132,32 @@ const pins = places.map((p) => {
     font-size: 0.9rem;
     letter-spacing: 0.06em;
   }
+
   .stage {
     position: relative;
+    box-sizing: border-box;
     width: 100%;
     aspect-ratio: 2 / 1;
+    overflow: hidden;
+    overflow: clip;
+    border: 1px solid #1b222a;
+    border-radius: 16px;
+    background: #0a0c0f;
+    touch-action: pan-y;
+  }
+  .stage.zoomed {
+    touch-action: none;
+    cursor: grab;
+  }
+  .stage.zoomed:active {
+    cursor: grabbing;
+  }
+
+  .layer {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+    --k: 1;
   }
   svg {
     display: block;
@@ -131,11 +168,13 @@ const pins = places.map((p) => {
     fill: #0a0c0f;
     stroke: #1b222a;
     stroke-width: 1;
+    vector-effect: non-scaling-stroke;
   }
   .country {
     fill: #171c22;
     stroke: #0a0c0f;
-    stroke-width: 0.5;
+    stroke-width: 0.6;
+    vector-effect: non-scaling-stroke;
   }
   .country.visited {
     fill: #24557f;
@@ -151,6 +190,7 @@ const pins = places.map((p) => {
     border: 0;
     background: none;
     cursor: pointer;
+    transform: scale(calc(1 / var(--k)));
   }
   .pin span {
     display: block;
@@ -162,6 +202,7 @@ const pins = places.map((p) => {
     box-shadow:
       0 0 0 3px rgba(217, 245, 255, 0.18),
       0 0 12px rgba(217, 245, 255, 0.6);
+    transform: scale(var(--s, 1));
     transition: transform 0.2s;
   }
   .pin.planned span {
@@ -172,7 +213,7 @@ const pins = places.map((p) => {
   }
   .pin:hover span,
   .pin.active span {
-    transform: scale(1.6);
+    --s: 1.6;
   }
   .pin:focus-visible {
     outline: 2px solid #fff;
@@ -186,6 +227,50 @@ const pins = places.map((p) => {
     }
     .pin span {
       margin: 13px;
+    }
+  }
+
+  .controls {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .controls button {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid #2a323a;
+    background: rgba(10, 12, 15, 0.85);
+    color: #e6edf3;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+  .controls button:hover {
+    border-color: #d9f5ff;
+  }
+
+  .zoomhint {
+    position: absolute;
+    left: 12px;
+    bottom: 10px;
+    margin: 0;
+    font-size: 0.75rem;
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .zoomhint .touch {
+    display: none;
+  }
+  @media (pointer: coarse) {
+    .zoomhint .mouse {
+      display: none;
+    }
+    .zoomhint .touch {
+      display: inline;
     }
   }
 
@@ -239,13 +324,200 @@ const pins = places.map((p) => {
 <script>
   const root = document.querySelector("[data-worldmap]");
   if (root) {
+    const stage = root.querySelector("[data-stage]");
+    const layer = root.querySelector("[data-layer]");
     const hint = root.querySelector("[data-card-hint]");
     const body = root.querySelector("[data-card-body]");
     const titleEl = root.querySelector("[data-card-title]");
     const metaEl = root.querySelector("[data-card-meta]");
     const summaryEl = root.querySelector("[data-card-summary]");
     const linkEl = root.querySelector("[data-card-link]");
-    const triggers = root.querySelectorAll("[data-id]");
+    const triggers = root.querySelectorAll(".pin[data-id], .chip[data-id]");
+
+    const MIN_K = 1;
+    const MAX_K = 10;
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    let view = { k: 1, tx: 0, ty: 0 };
+    let raf = 0;
+
+    // 限制平移范围：地图永远铺满舞台，不会拖出空白
+    function clampView(v) {
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      const k = Math.min(MAX_K, Math.max(MIN_K, v.k));
+      return {
+        k,
+        tx: Math.min(0, Math.max(w - w * k, v.tx)),
+        ty: Math.min(0, Math.max(h - h * k, v.ty)),
+      };
+    }
+
+    function render() {
+      layer.style.setProperty("--k", String(view.k));
+      layer.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.k})`;
+      stage.classList.toggle("zoomed", view.k > 1.01);
+    }
+
+    function setView(v) {
+      cancelAnimationFrame(raf);
+      view = clampView(v);
+      render();
+    }
+
+    function animateTo(target, ms = 500) {
+      cancelAnimationFrame(raf);
+      const to = clampView(target);
+      if (reduceMotion || ms <= 0) {
+        view = to;
+        render();
+        return;
+      }
+      const from = { ...view };
+      const t0 = performance.now();
+      const step = (now) => {
+        const p = Math.min(1, (now - t0) / ms);
+        const e = 1 - Math.pow(1 - p, 3);
+        view = {
+          k: from.k + (to.k - from.k) * e,
+          tx: from.tx + (to.tx - from.tx) * e,
+          ty: from.ty + (to.ty - from.ty) * e,
+        };
+        render();
+        if (p < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }
+
+    // 以舞台上的 (px, py) 点为中心缩放到 newK 后，应有的视图
+    function zoomedAbout(px, py, newK) {
+      const k = Math.min(MAX_K, Math.max(MIN_K, newK));
+      const ratio = k / view.k;
+      return {
+        k,
+        tx: px - (px - view.tx) * ratio,
+        ty: py - (py - view.ty) * ratio,
+      };
+    }
+
+    // 按钮
+    root
+      .querySelector("[data-zoom-in]")
+      .addEventListener("click", () =>
+        animateTo(
+          zoomedAbout(
+            stage.clientWidth / 2,
+            stage.clientHeight / 2,
+            view.k * 2,
+          ),
+          300,
+        ),
+      );
+    root
+      .querySelector("[data-zoom-out]")
+      .addEventListener("click", () =>
+        animateTo(
+          zoomedAbout(
+            stage.clientWidth / 2,
+            stage.clientHeight / 2,
+            view.k / 2,
+          ),
+          300,
+        ),
+      );
+    root
+      .querySelector("[data-zoom-reset]")
+      .addEventListener("click", () => animateTo({ k: 1, tx: 0, ty: 0 }, 400));
+
+    // Ctrl + 滚轮（触控板双指张开也走这里）
+    stage.addEventListener(
+      "wheel",
+      (e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        const r = stage.getBoundingClientRect();
+        const dy = Math.max(-60, Math.min(60, e.deltaY));
+        setView(
+          zoomedAbout(
+            e.clientX - r.left,
+            e.clientY - r.top,
+            view.k * Math.exp(-dy * 0.01),
+          ),
+        );
+      },
+      { passive: false },
+    );
+
+    // 双击放大
+    stage.addEventListener("dblclick", (e) => {
+      if (e.target.closest("button")) return;
+      const r = stage.getBoundingClientRect();
+      animateTo(
+        zoomedAbout(e.clientX - r.left, e.clientY - r.top, view.k * 2),
+        300,
+      );
+    });
+
+    // 拖动平移（单指/鼠标）和双指缩放
+    const pointers = new Map();
+    let pinch = null;
+
+    stage.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) return;
+      stage.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), k: view.k };
+      }
+    });
+
+    stage.addEventListener("pointermove", (e) => {
+      const prev = pointers.get(e.pointerId);
+      if (!prev) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1) {
+        if (view.k > 1.01) {
+          setView({
+            k: view.k,
+            tx: view.tx + e.clientX - prev.x,
+            ty: view.ty + e.clientY - prev.y,
+          });
+        }
+      } else if (pointers.size === 2 && pinch) {
+        const [a, b] = [...pointers.values()];
+        const r = stage.getBoundingClientRect();
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        setView(
+          zoomedAbout(
+            (a.x + b.x) / 2 - r.left,
+            (a.y + b.y) / 2 - r.top,
+            (pinch.k * dist) / pinch.dist,
+          ),
+        );
+      }
+    });
+
+    const endPointer = (e) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinch = null;
+    };
+    stage.addEventListener("pointerup", endPointer);
+    stage.addEventListener("pointercancel", endPointer);
+
+    window.addEventListener("resize", () => setView(view));
+
+    // 选中地点：更新卡片，并把地图飞过去
+    function flyTo(pin) {
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      const px = (parseFloat(pin.dataset.x) / 100) * w;
+      const py = (parseFloat(pin.dataset.y) / 100) * h;
+      const k = Math.max(view.k, 5);
+      animateTo({ k, tx: w / 2 - px * k, ty: h / 2 - py * k }, 700);
+    }
 
     function select(id) {
       const pin = root.querySelector(`.pin[data-id="${id}"]`);
@@ -261,6 +533,7 @@ const pins = places.map((p) => {
       linkEl.setAttribute("href", pin.dataset.href);
       hint.hidden = true;
       body.hidden = false;
+      flyTo(pin);
     }
 
     triggers.forEach((el) =>
