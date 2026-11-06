@@ -6,6 +6,7 @@
     "node": ">=22.23.4"
   },
   "scripts": {
+    "test": "node --test tests/*.test.mjs",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
@@ -14,7 +15,14 @@
   "dependencies": {
     "astro": "^7.4.2",
     "d3-geo": "^3.1.1",
+    "globe.gl": "^2.46.2",
+    "solar-calculator": "^0.3.0",
+    "three": "^0.186.1",
+    "three-slippy-map-globe": "^1.0.6",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "heic-decode": "^2.1.0"
   }
 }

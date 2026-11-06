@@ -1,0 +1,1158 @@
+---
+import { getCollection } from "astro:content";
+import { numericByAlpha2, countryOnlyEntries, countryEnglishNames } from "../data/countries";
+import { placeImages } from "../data/placeImages";
+import CountryAlbums from "./CountryAlbums.astro";
+
+const places = (await getCollection("places")).sort(
+  (a, b) => (a.data.order ?? 0) - (b.data.order ?? 0),
+);
+
+// Merge city records with country presets without replacing their city directories.
+const groups = new Map();
+for (const p of places) {
+  if (p.data.status !== "visited") continue;
+  const code = p.data.countryCode;
+  if (!groups.has(code)) {
+    groups.set(code, {
+      code,
+      name: p.data.country,
+      numeric: numericByAlpha2[code] ?? null,
+      cities: [],
+    });
+  }
+  groups.get(code).cities.push({
+    id: p.id,
+    title: p.data.title,
+    lat: p.data.coords[0],
+    lng: p.data.coords[1],
+    date: p.data.date ?? "",
+    summary: p.data.summary,
+    href: `/places/${p.id}/`,
+    image: placeImages[p.id] ?? null,
+  });
+}
+for (const entry of countryOnlyEntries) {
+  const existing = groups.get(entry.code);
+  groups.set(entry.code, {
+    ...entry,
+    numeric: numericByAlpha2[entry.code],
+    cities: existing?.cities ?? [],
+  });
+}
+const countries = [...groups.values()];
+const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
+---
+
+<section
+  class="hero"
+  data-globe-root
+  data-countries={JSON.stringify(countries)}
+>
+  <div class="canvas" data-globe-canvas></div>
+  <p class="loading" data-globe-loading>地球加载中…</p>
+
+  <header class="overlay">
+    <h1>Midy's Travel Map</h1>
+    <p class="stats">{countries.length} 个国家 · {cityCount} 个城市</p>
+  </header>
+  <aside class="country-drawer" data-country-drawer aria-label="国家导航侧边栏">
+  <nav class="country-navigation" id="globe-country-navigation" aria-label="去过的国家" inert>
+    <ul class="country-grid">
+      {countries.map((c) => (
+        <li class:list={{ "country-wide": c.name.length > 8 }}>
+          <button type="button" class="country-nav-button" data-country-btn={c.code}
+            data-country-name={countryEnglishNames[c.code]} aria-pressed="false"
+            aria-describedby="country-name-tooltip">
+            <span class="country-dot" aria-hidden="true"></span>
+            <span class="country-label">{c.name}</span>
+            <span class="country-code" aria-hidden="true">{c.code}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  </nav>
+  <button type="button" class="country-drawer-toggle" data-country-drawer-toggle
+    aria-controls="globe-country-navigation" aria-expanded="false" aria-label="展开国家导航">
+    <svg width="16" height="24" viewBox="0 0 16 24" fill="none" aria-hidden="true">
+      <path d="m5 6 6 6-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </button>
+  </aside>
+  <div class="country-tooltip" id="country-name-tooltip" role="tooltip" lang="en" hidden></div>
+
+  <p class="note">
+    <span class="mouse">拖动旋转 · Ctrl + 滚轮缩放</span>
+    <span class="touch">左右滑动旋转 · 双指缩放 · 上下滑动翻页</span>
+    <span class="time" data-globe-time></span>
+  </p>
+
+  <div class="dock">
+    <button type="button" class="chip back country-reset" data-country-reset data-reset hidden>
+      ← 全景
+    </button>
+    <div class="card" data-card tabindex="-1" role="region" aria-labelledby="globe-city-title" hidden>
+      <div class="card-media" data-card-media hidden>
+        <img data-card-image alt="" width="1280" height="720" decoding="async" hidden />
+      </div>
+      <div class="card-body">
+        <h3 data-card-title id="globe-city-title"></h3>
+        <p class="meta" data-card-meta></p>
+        <p data-card-summary></p>
+        <a data-card-link href="#">进入这座城市 →</a>
+      </div>
+    </div>
+    {countries.filter(country => country.cities.length).map(country => (
+      <ul class="city-row" data-cities-of={country.code} aria-label={`${country.name}城市导航`} hidden>
+        <li><button type="button" class="chip back" data-reset>← 全景</button></li>
+        {country.cities.map(city => (
+          <li><button type="button" class="chip city" data-country={country.code} data-city={city.id}
+            aria-pressed="false">{city.title}</button></li>
+        ))}
+      </ul>
+    ))}
+  </div>
+</section>
+
+<CountryAlbums countries={countries} />
+
+<style>
+  .hero {
+    --map-gutter: clamp(20px, 3vw, 44px);
+    --sidebar-width: min(340px, calc(100vw - 64px));
+    position: relative;
+    width: 100%;
+    height: calc(100svh - var(--site-header-height, 76px));
+    min-height: 560px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 48%, #0a1426 0%, #050505 58%);
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 24vh;
+    background: linear-gradient(to bottom, rgba(5, 5, 5, 0), #050505);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .canvas {
+    position: absolute;
+    inset: 0;
+  }
+  .loading {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  .overlay {
+    position: absolute;
+    z-index: 5;
+    top: var(--map-gutter);
+    left: var(--map-gutter);
+    pointer-events: none;
+  }
+  .country-drawer {
+    position: absolute; z-index: 8; left: 0;
+    top: 120px; bottom: 80px;
+    width: calc(var(--sidebar-width) + 34px);
+    display: flex; align-items: center;
+    transform: translateX(calc(0px - var(--sidebar-width)));
+    transition: transform .48s cubic-bezier(.22, 1, .36, 1);
+    pointer-events: none;
+  }
+  .country-drawer.is-open { transform: translateX(0); }
+  .country-drawer-toggle {
+    flex: 0 0 34px; width: 34px; height: 72px; padding: 0;
+    display: grid; place-items: center; pointer-events: auto;
+    border: 1px solid rgba(216, 225, 235, .2); border-left: 0;
+    border-radius: 0 12px 12px 0; color: #b6bec8;
+    background: rgba(13, 17, 22, .65); backdrop-filter: blur(16px);
+    cursor: pointer; transition: color .2s, background .2s, border-color .2s;
+  }
+  .country-drawer-toggle:is(:hover, :focus-visible) {
+    color: #fff; background: rgba(32, 38, 46, .8); border-color: rgba(216, 225, 235, .4);
+  }
+  .country-drawer-toggle:focus-visible { outline: 1px solid #a7bacb; outline-offset: 3px; }
+  .country-drawer-toggle svg { transition: transform .4s ease; }
+  .country-drawer.is-open .country-drawer-toggle svg { transform: rotate(180deg); }
+  .overlay h1 {
+    margin: 0;
+    font-size: clamp(1.45rem, 2.25vw, 2rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .stats {
+    margin: 0.4rem 0 0;
+    opacity: 0.6;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+  }
+  .country-navigation {
+    box-sizing: border-box;
+    flex: 0 0 var(--sidebar-width);
+    max-height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #444b53 transparent;
+    pointer-events: none;
+    padding: 18px;
+    border: 1px solid rgba(216, 225, 235, .15); border-left: 0;
+    border-radius: 0 16px 16px 0;
+    background: rgba(10, 14, 19, .82);
+    backdrop-filter: blur(24px) saturate(.8);
+    box-shadow: 12px 12px 36px rgba(0, 0, 0, .15);
+    opacity: 0; visibility: hidden;
+    transition: opacity .3s ease, visibility 0s linear .48s;
+  }
+  .country-drawer.is-open .country-navigation {
+    opacity: 1; visibility: visible; pointer-events: auto;
+    transition: opacity .3s ease .06s, visibility 0s;
+  }
+  .country-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .country-wide { grid-column: 1 / -1; }
+  .country-nav-button {
+    width: 100%; min-height: 32px; padding: 6px 10px;
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid rgba(216, 225, 235, .11); border-radius: 7px;
+    background: rgba(11, 14, 19, .66); color: #b6bec8;
+    font: inherit; font-size: 12px; line-height: 1.5; text-align: left; cursor: pointer;
+    transition: color .2s ease, background .2s ease, border-color .2s ease, transform .2s ease;
+  }
+  .country-label { flex: 1; }
+  .country-code { font-size: 9px; letter-spacing: .08em; color: #6d7784; transition: color .2s ease; }
+  .country-dot { width: 3px; height: 3px; flex: 0 0 3px; border: 1px solid #68727e; border-radius: 50%; transition: background .2s, border-color .2s; }
+  .country-nav-button:is(:hover, :focus-visible) {
+    color: #f3f5f7; border-color: rgba(207, 220, 233, .38); background: rgba(35, 41, 49, .8); transform: translateX(2px);
+  }
+  .country-nav-button:focus-visible { outline: 1px solid #a7bacb; outline-offset: 2px; }
+  .country-nav-button.active { color: #e9f3fa; border-color: rgba(156, 196, 222, .5); background: rgba(34, 49, 61, .68); }
+  .country-nav-button:is(:hover, :focus-visible, .active) .country-code { color: #b2c1cf; }
+  .country-nav-button.active .country-dot { background: #c2dce6; border-color: #c2dce6; }
+  .country-nav-button:active { transform: translateX(1px) scale(.985); }
+  .country-tooltip {
+    position: fixed; z-index: 60; max-width: min(300px, calc(100vw - 24px));
+    box-sizing: border-box; padding: 9px 12px; border: 1px solid rgba(202, 218, 231, .22);
+    border-radius: 7px; background: rgba(15, 19, 25, .97); color: #e4eaf0;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .24); font-size: 12px; line-height: 1.5;
+    pointer-events: none; animation: country-tip-in .15s ease both;
+  }
+  .country-tooltip[hidden] { display: none; }
+  @keyframes country-tip-in { from { opacity: 0; transform: translateX(-3px); } to { opacity: 1; transform: translateX(0); } }
+  .note {
+    position: absolute;
+    z-index: 3;
+    margin: 0;
+    pointer-events: none;
+    text-align: right;
+    top: clamp(1.2rem, 4vw, 2.5rem);
+    right: clamp(1.2rem, 4vw, 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.75rem;
+    opacity: 0.5;
+  }
+  .note .touch {
+    display: none;
+  }
+  @media (pointer: coarse) {
+    .note .mouse {
+      display: none;
+    }
+    .note .touch {
+      display: inline;
+    }
+  }
+
+
+  .dock {
+    position: absolute;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    left: var(--map-gutter);
+    right: clamp(1.2rem, 4vw, 3rem);
+    bottom: clamp(1rem, 3vw, 2rem);
+    pointer-events: none;
+    max-height: calc(100% - 8rem);
+  }
+  .dock > * {
+    pointer-events: auto;
+  }
+  .city-row { flex-shrink: 0; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+  .city-row[hidden] { display: none; }
+  .chip {
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    color: #e6edf3;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(8, 12, 18, 0.55);
+    backdrop-filter: blur(8px);
+  }
+  .chip:hover,
+  .chip.active {
+    border-color: #9ecbff;
+    color: #fff;
+  }
+  .chip.back {
+    opacity: 0.8;
+  }
+  .card {
+    width: min(100%, 28rem);
+    min-height: 0;
+    max-height: min(62svh, 32rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(8, 12, 18, 0.96);
+    backdrop-filter: blur(10px);
+  }
+  .card[hidden] {
+    display: none;
+  }
+  .card-media {
+    position: relative;
+    flex: 0 0 auto;
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+    background: #111b27;
+  }
+  .card-media[hidden], .card-media img[hidden] {
+    display: none;
+  }
+  .card-media img {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .card-body {
+    min-height: 0;
+    padding: 1rem 1.2rem;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  @media (max-height: 650px) {
+    .card-media {
+      aspect-ratio: auto;
+      height: 100px;
+    }
+  }
+  .card h3 {
+    margin: 0;
+    font-size: 1.4rem;
+  }
+  .card .meta {
+    margin: 0.25rem 0 0.7rem;
+    opacity: 0.6;
+    font-size: 0.9rem;
+  }
+  .card p {
+    margin: 0 0 0.6rem;
+  }
+  .card a {
+    color: #9ecbff;
+  }
+
+  .country-reset {
+    align-self: flex-start;
+  }
+  .country-reset[hidden] {
+    display: none;
+  }
+  @media (max-width: 760px) {
+    .hero { height: calc(100svh - var(--site-header-height, 76px)); min-height: 540px; }
+    .country-drawer { top: 112px; bottom: 76px; }
+    .country-nav-button { min-height: 40px; padding: 8px; gap: 6px; }
+    .country-code { font-size: 8px; }
+    .note { top: auto; bottom: 18px; left: 20px; right: 20px; text-align: left; font-size: 10px; }
+    .dock { left: 20px; right: 20px; bottom: 70px; max-height: min(54svh, 380px); }
+    .card { max-height: min(54svh, 380px); }
+    .overlay h1 { font-size: 1.65rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .country-drawer, .country-navigation, .country-drawer.is-open .country-navigation, .country-drawer-toggle, .country-drawer-toggle svg { transition: none; }
+    .country-nav-button, .country-code, .country-dot { transition: none; }
+    .country-nav-button:is(:hover, :focus-visible, :active) { transform: none; }
+    .country-tooltip { animation: none; }
+  }
+</style>
+
+<script>
+  import Globe from "globe.gl";
+  import { ImageLoader, TextureLoader, Vector3 } from "three";
+  import { SurfaceTiles } from "./SurfaceTiles";
+  import { TileViewCache } from "./TileViewCache";
+  import { TileImageCache, waitForPreloadIdle } from "./TileImageCache";
+  import { TilePriority } from "./TilePriority";
+  import { countryTilePlan, overviewTilePlan } from "./countryTilePlan";
+  import { createSurfaceMaterial } from "./earthSurface";
+  import { HighlightLayer } from "./HighlightLayer";
+  import { buildHighlightPolygons, clickableCountryCode, isProvinceHighlight } from "./globeHighlights";
+  import * as solar from "solar-calculator";
+  import { feature } from "topojson-client";
+  import { geoCentroid, geoBounds } from "d3-geo";
+
+  // One imagery source at every zoom level; the local globe remains underneath
+  // as a fallback while individual tiles are loading.
+  let tileHost = "server.arcgisonline.com";
+  const TILE_URL = (x: number, y: number, level: number) =>
+    `https://${tileHost}/ArcGIS/rest/services/World_Imagery/MapServer/tile/${level}/${y}/${x}`;
+
+  // 太阳此刻直射点：[经度, 纬度]
+  const sunPosAt = (dt) => {
+    const day = new Date(+dt).setUTCHours(0, 0, 0, 0);
+    const t = solar.century(dt);
+    const longitude = ((day - dt) / 864e5) * 360 - 180;
+    return [longitude - solar.equationOfTime(t) / 4, solar.declination(t)];
+  };
+
+  const root = document.querySelector("[data-globe-root]");
+  const albumRoot = document.querySelector("[data-travel-albums]");
+  const countryTooltip = root?.querySelector<HTMLElement>("[role=tooltip]");
+  let tooltipButton: HTMLButtonElement | null = null;
+  function hideCountryTooltip() {
+    if (countryTooltip) countryTooltip.hidden = true;
+    tooltipButton = null;
+  }
+  const countryDrawer = root?.querySelector<HTMLElement>("[data-country-drawer]");
+  const drawerToggle = root?.querySelector<HTMLButtonElement>("[data-country-drawer-toggle]");
+  const drawerNavigation = root?.querySelector<HTMLElement>("#globe-country-navigation");
+  function setCountryDrawer(open: boolean) {
+    if (!countryDrawer || !drawerToggle || !drawerNavigation) return;
+    if (!open) {
+      hideCountryTooltip();
+      if (drawerNavigation.contains(document.activeElement)) drawerToggle.focus({ preventScroll: true });
+    }
+    countryDrawer.classList.toggle("is-open", open);
+    drawerNavigation.inert = !open;
+    drawerToggle.setAttribute("aria-expanded", String(open));
+    drawerToggle.setAttribute("aria-label", open ? "收起国家导航" : "展开国家导航");
+  }
+  drawerToggle?.addEventListener("pointerenter", event => {
+    if (event.pointerType === "mouse") setCountryDrawer(true);
+  });
+  drawerToggle?.addEventListener("click", event => {
+    // Hover already opens the drawer for a mouse; taps and keyboard clicks toggle it.
+    const mouseClick = event.detail > 0 && matchMedia("(hover: hover) and (pointer: fine)").matches;
+    setCountryDrawer(mouseClick || drawerToggle.getAttribute("aria-expanded") !== "true");
+  });
+  document.addEventListener("pointerdown", event => {
+    if (event.target instanceof Node && !countryDrawer?.contains(event.target)) setCountryDrawer(false);
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") setCountryDrawer(false);
+  });
+  function showCountryTooltip(button: HTMLButtonElement) {
+    if (!countryTooltip || !button.dataset.countryName) return;
+    tooltipButton = button;
+    countryTooltip.textContent = button.dataset.countryName;
+    countryTooltip.hidden = false;
+    const anchor = button.getBoundingClientRect(), box = countryTooltip.getBoundingClientRect();
+    const width = document.documentElement.clientWidth, height = window.innerHeight;
+    let left = anchor.right + 12, top = anchor.top + (anchor.height - box.height) / 2;
+    if (left + box.width > width - 12) {
+      left = anchor.left - box.width - 12;
+      if (left < 12) { left = Math.max(12, Math.min(anchor.left, width - box.width - 12)); top = anchor.bottom + 8; }
+    }
+    if (top + box.height > height - 12) top = anchor.top - box.height - 8;
+    countryTooltip.style.left = `${Math.max(12, left)}px`;
+    countryTooltip.style.top = `${Math.max(12, Math.min(top, height - box.height - 12))}px`;
+  }
+  root?.querySelectorAll<HTMLButtonElement>("[data-country-btn]").forEach(button => {
+    button.addEventListener("pointerenter", () => showCountryTooltip(button));
+    button.addEventListener("pointerleave", () => { if (tooltipButton === button && document.activeElement !== button) hideCountryTooltip(); });
+    button.addEventListener("focus", () => showCountryTooltip(button));
+    button.addEventListener("blur", () => { if (tooltipButton === button) hideCountryTooltip(); });
+    button.addEventListener("keydown", event => {
+      if (event.key === "Escape" && countryTooltip && !countryTooltip.hidden) {
+        hideCountryTooltip(); event.stopPropagation();
+      }
+    });
+  });
+  window.addEventListener("resize", hideCountryTooltip, { passive: true });
+  window.addEventListener("scroll", hideCountryTooltip, { passive: true, capture: true });
+  const loadingPage = document.querySelector<HTMLElement>(".home-loading[data-home-loading]");
+  const loadingTitle = document.querySelector("[data-load-title]");
+  const loadingDetail = document.querySelector("[data-load-detail]");
+  const retryButton = document.querySelector<HTMLButtonElement>("[data-load-retry]");
+  const homeContent = document.querySelector<HTMLElement>("[data-home-content]");
+  if (homeContent) homeContent.inert = true;
+  function loadStage(detail: string) {
+    if (!loadingPage || loadingPage.hidden) return;
+    loadingDetail.textContent = detail;
+  }
+  function paintLoading() {
+    return new Promise<void>(resolve => {
+      const finish = () => { clearTimeout(timer); resolve(); };
+      const timer = setTimeout(finish, 100);
+      requestAnimationFrame(() => setTimeout(finish, 0));
+    });
+  }
+  function revealHome() {
+    const moveFocus = loadingPage?.contains(document.activeElement);
+    loadingPage?.setAttribute("hidden", "");
+    delete document.documentElement.dataset.homeLoadingActive;
+    homeContent?.removeAttribute("inert");
+    document.querySelector<HTMLElement>(".site-header")?.removeAttribute("inert");
+    if (moveFocus) {
+      document.querySelector<HTMLElement>(".site-header a")?.focus({ preventScroll: true });
+    }
+  }
+  retryButton?.addEventListener("click", () => location.reload());
+
+  async function init() {
+    const el = root.querySelector("[data-globe-canvas]");
+    const loadingEl = root.querySelector("[data-globe-loading]");
+    const timeEl = root.querySelector("[data-globe-time]");
+    const card = root.querySelector("[data-card]");
+    const cardTitle = root.querySelector("[data-card-title]");
+    const cardMeta = root.querySelector("[data-card-meta]");
+    const cardSummary = root.querySelector("[data-card-summary]");
+    const cardLink = root.querySelector("[data-card-link]");
+    const cardMedia = root.querySelector("[data-card-media]");
+    const cardImage = root.querySelector("[data-card-image]");
+    const countries = JSON.parse(root.dataset.countries);
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    const FLY_MS = reduceMotion ? 0 : 1800;
+
+    // 先创建渲染器，按真实 GPU 上限选择贴图尺寸。
+    const world = new Globe(el)
+      .width(el.clientWidth)
+      .height(el.clientHeight)
+      .backgroundColor("rgba(0,0,0,0)");
+    const renderer = world.renderer();
+    const textureLimit = Math.min(
+      renderer.capabilities.maxTextureSize,
+      coarse || navigator.connection?.saveData ? 4096 : 8192,
+    );
+    const loader = new TextureLoader();
+    async function loadEarthTexture(kind: string) {
+      let texture;
+      try {
+        texture = await loader.loadAsync(`/textures/earth-${kind}-8k.jpg`);
+      } catch (err) {
+        console.warn(`[globe] ${kind} 8K 贴图加载失败，尝试标准贴图`, err);
+        texture = await loader.loadAsync(`/textures/earth-${kind}.jpg`);
+      }
+      const image = texture.image;
+      const scale = Math.min(1, textureLimit / Math.max(image.width, image.height));
+      if (scale < 1) {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("无法调整地球贴图尺寸");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        texture.image = canvas;
+        texture.needsUpdate = true;
+      }
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return texture;
+    }
+    let baseComplete = 0;
+    const baseReady = <T,>(promise: Promise<T>) => promise.then(result => {
+      baseComplete++;
+      loadStage(`Loading 8K maps and boundaries · ${baseComplete} / 4 ready`);
+      return result;
+    });
+    const [dayTexture, nightTexture, topo, chinaProvinces] = await Promise.all([
+      loadEarthTexture("day"),
+      loadEarthTexture("night"),
+      fetch("/data/countries-50m.json").then((r) => {
+        if (!r.ok) throw new Error(`国家边界加载失败：HTTP ${r.status}`);
+        return r.json();
+      }),
+      fetch("/data/china-provinces.geo.json").then((r) => {
+        if (!r.ok) throw new Error(`省级边界加载失败：HTTP ${r.status}`);
+        return r.json();
+      }).then(data => data.features).catch(err => {
+        console.warn("[globe] 中国省级高亮暂不可用", err);
+        return [];
+      }),
+    ].map(baseReady));
+
+    const sunDir = new Vector3(1, 0, 0);
+    const material = createSurfaceMaterial(dayTexture, nightTexture, sunDir);
+
+    // Country outlines plus selected Chinese provinces; China has no national outline.
+    const countryByNumeric = new Map();
+    countries.forEach((c) => {
+      if (c.numeric) countryByNumeric.set(c.numeric, c);
+    });
+    const isVisited = (f) => countryByNumeric.has(Number(f.id));
+    const visitedFeatures = feature(
+      topo,
+      topo.objects.countries,
+    ).features.filter(isVisited);
+
+    let selectedCode = null;
+    let detailViewKey = "free";
+    let tilesOn = false;
+    const highlightPolygons = buildHighlightPolygons(visitedFeatures, countryByNumeric, chinaProvinces);
+    const highlights = new HighlightLayer(highlightPolygons, countryByNumeric, sunDir);
+    world.scene().add(highlights);
+    let resumeTimer;
+
+    world
+      .globeMaterial(material)
+      .globeCurvatureResolution(1)
+      .atmosphereColor("#6aa8ff")
+      .atmosphereAltitude(0.18)
+      .polygonsData(highlightPolygons)
+      .polygonAltitude(0.004)
+      .polygonCapMaterial(f => highlights.fillMaterial(f))
+      .polygonStrokeColor(() => null)
+      .polygonSideColor(() => "rgba(0, 0, 0, 0)")
+      .polygonsTransitionDuration(0)
+      .polygonLabel(
+        (f) => isProvinceHighlight(f) ? f.properties.name
+          : countryByNumeric.get(Number(f.id))?.name || f.properties.name,
+      )
+      .onPolygonClick((f) => {
+        const code = clickableCountryCode(f, countryByNumeric);
+        if (code) showCountry(code);
+      });
+
+    // Selection updates existing materials and buffers without rebuilding boundaries.
+    function applyPolygonStyle() {
+      highlights.setSelection(selectedCode);
+    }
+    applyPolygonStyle();
+
+    // 渲染质量
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    root.dataset.textureWidth = String(dayTexture.image.width);
+    if (coarse) renderer.domElement.style.touchAction = "pan-y";
+
+    // Stable overview coverage stays under the detail engine throughout flights.
+    let interacting = false;
+    let detailAfter = 0;
+    let settleTimer: ReturnType<typeof setTimeout>;
+    const cameraBusy = () => interacting || performance.now() < detailAfter;
+    const imageCache = new TileImageCache(coarse ? 48 * 1024 * 1024 : 96 * 1024 * 1024);
+    const priorities = new TilePriority();
+    const tileImageLoader = new ImageLoader();
+    function loadTileImage(url: string) {
+      const match = url.match(/\/tile\/(\d+)\/(\d+)\/(\d+)/);
+      if (!match) return Promise.reject(new Error("Invalid imagery tile URL"));
+      const tile = { level: Number(match[1]), y: Number(match[2]), x: Number(match[3]) };
+      return imageCache.decode(tile, url, async blob => {
+        const localUrl = URL.createObjectURL(blob);
+        try { return await tileImageLoader.loadAsync(localUrl); }
+        finally { URL.revokeObjectURL(localUrl); }
+      }).then(image => {
+        controls.minDistance = coarse ? 108 : 103;
+        return image;
+      });
+    }
+    const surfaceOptions = {
+      day: dayTexture, night: nightTexture, sun: sunDir,
+      anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
+      reduceMotion,
+      canUpload: () => !cameraBusy(),
+      loadImage: loadTileImage,
+      uploadBudget: 4,
+    };
+    const overviewLevel = coarse ? 3 : 4;
+    const overview = new SurfaceTiles(100.05,
+      { ...surfaceOptions, order: -100 },
+      { minLevel: overviewLevel, maxLevel: overviewLevel },
+    );
+    overview.curvatureResolution = 1;
+    const detailCache = new TileViewCache<SurfaceTiles>(() => {
+      const view = new SurfaceTiles(100.06,
+        { ...surfaceOptions, order: -70, onResidencyChange: () => detailCache.trim() },
+        { maxLevel: 17 },
+      );
+      view.curvatureResolution = 0.75;
+      view.thresholds = Array.from({ length: 24 }, (_, i) =>
+        (coarse ? 16 : 32) / 2 ** i,
+      );
+      view.visible = false;
+      world.scene().add(view);
+      return view;
+    }, coarse ? 3 : 6, coarse ? 512 : 2048);
+    let satellite: SurfaceTiles | undefined;
+    overview.visible = false;
+    world.scene().add(overview);
+    let tileSourceReady = false;
+    let entered = false;
+    let introComplete = false;
+    let introTimer: ReturnType<typeof setTimeout>;
+    let priorityTiles = [];
+    const backgroundAbort = new AbortController();
+    const pauseBackground = () => !introComplete || cameraBusy() || document.hidden;
+    imageCache.configure({ paused: pauseBackground, score: tile => priorities.rank(tile) }, coarse ? 4 : 6);
+    let tileTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastTileUpdate = 0;
+    function deferDetails(ms: number) {
+      detailAfter = performance.now() + ms;
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        lastTileUpdate = 0;
+        updateTiles();
+      }, ms + 50);
+    }
+    function updateTiles() {
+      if (tileTimer !== undefined) return;
+      // A trailing timer cannot be starved by continuous control events.
+      tileTimer = setTimeout(() => {
+        tileTimer = undefined;
+        lastTileUpdate = performance.now();
+        if (!tileSourceReady || !entered || !introComplete) return;
+        overview.visible = true;
+        if (!tilesOn) overview.tileUrl = TILE_URL;
+        overview.updatePov(world.camera());
+        tilesOn = true;
+        root.dataset.surface = "satellite";
+        root.dataset.overviewTiles = String(overview.loadedTileCount);
+        root.dataset.detailTiles = String(satellite?.loadedTileCount ?? 0);
+        root.dataset.tileMotion = cameraBusy() ? "moving" : "settled";
+        if (cameraBusy()) return;
+        const needsDetail = altNow() < 1.35;
+        if (needsDetail) {
+          satellite = detailCache.activate(detailViewKey);
+          if (!satellite.tileUrl) satellite.tileUrl = TILE_URL;
+          satellite.updatePov(world.camera());
+        } else {
+          // Hiding the detail layer must not destroy a previously visited view.
+          detailCache.hide();
+        }
+        detailCache.trim();
+        root.dataset.tileLevel = String(needsDetail ? satellite!.level : overviewLevel);
+        root.dataset.cachedViews = String(detailCache.size);
+        root.dataset.cachedTiles = String(detailCache.residentTiles);
+        root.dataset.viewCacheHits = String(detailCache.hits);
+        root.dataset.viewCacheMisses = String(detailCache.misses);
+        root.dataset.viewCacheEvictions = String(detailCache.evictions);
+      }, Math.max(0, 150 - (performance.now() - lastTileUpdate)));
+    }
+
+    // 旋转：带惯性，自转缓慢
+    const controls = world.controls();
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+    controls.autoRotate = false;
+    controls.enabled = false;
+    controls.autoRotateSpeed = 0.35;
+    controls.minDistance = textureLimit >= 8192 ? 108 : 125;
+    controls.maxDistance = 520; // Allow the original distant opening pose.
+    controls.addEventListener("start", () => {
+      finishIntro();
+      interacting = true;
+      deferDetails(200);
+      clearTimeout(resumeTimer);
+      controls.autoRotate = false;
+    });
+    controls.addEventListener("end", () => {
+      interacting = false;
+      deferDetails(250);
+      clearTimeout(resumeTimer);
+      if (!reduceMotion && !selectedCode)
+        resumeTimer = setTimeout(() => (controls.autoRotate = true), 4000);
+    });
+
+    // 丝滑缩放：接管 Ctrl + 滚轮，按高度比例缩放，每帧逼近目标
+    const altNow = () => world.camera().position.length() / 100 - 1;
+    const minAlt = () => controls.minDistance / 100 - 1;
+    const maxAlt = () => controls.maxDistance / 100 - 1;
+    controls.addEventListener("change", () => {
+      priorities.update(world.camera(), sunDir);
+      highlights.setZoom(altNow());
+      if (interacting) deferDetails(250);
+      updateTiles();
+      controls.autoRotateSpeed =
+        0.35 * Math.min(1, Math.max(0.12, altNow() / 2.4));
+    });
+
+    let targetAlt = altNow();
+    let rafId = 0;
+    let lastT = 0;
+    const tick = (now) => {
+      const dt = Math.min(48, now - (lastT || now));
+      lastT = now;
+      const k = 1 - Math.pow(0.84, dt / 16.67);
+      const cur = altNow();
+      const next = cur + (targetAlt - cur) * k;
+      const done = Math.abs(targetAlt - next) < 0.0006;
+      world.camera().position.setLength(100 * (1 + (done ? targetAlt : next)));
+      if (done) {
+        rafId = 0;
+        lastT = 0;
+        deferDetails(200);
+      } else {
+        deferDetails(200);
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+    el.addEventListener(
+      "wheel",
+      (e) => {
+        e.stopPropagation();
+        if (!(e.ctrlKey || e.metaKey)) return;
+        finishIntro();
+        deferDetails(350);
+        e.preventDefault();
+        if (!rafId) targetAlt = altNow();
+        let d = e.deltaY;
+        if (e.deltaMode === 1) d *= 33;
+        else if (e.deltaMode === 2) d *= 120;
+        d = Math.max(-120, Math.min(120, d));
+        targetAlt = Math.min(
+          maxAlt(),
+          Math.max(minAlt(), targetAlt * Math.exp(d * 0.0022)),
+        );
+        if (!rafId) rafId = requestAnimationFrame(tick);
+      },
+      { capture: true, passive: false },
+    );
+
+    let flightSampleFrame = 0;
+    function sampleFlight(ms: number) {
+      if (!import.meta.env.DEV || !ms) return;
+      cancelAnimationFrame(flightSampleFrame);
+      const deltas: number[] = [];
+      const end = performance.now() + ms;
+      let previous = performance.now();
+      const sample = (now: number) => {
+        deltas.push(now - previous);
+        previous = now;
+        if (now < end) flightSampleFrame = requestAnimationFrame(sample);
+        else {
+          deltas.sort((a, b) => a - b);
+          root.dataset.flightP95Ms = String(Math.round(deltas[Math.floor(deltas.length * 0.95)] ?? 0));
+          root.dataset.flightMaxMs = String(Math.round(deltas.at(-1) ?? 0));
+          root.dataset.flightFrames = String(deltas.length);
+        }
+      };
+      flightSampleFrame = requestAnimationFrame(sample);
+    }
+    function flyTo(pov: { lat?: number; lng?: number; altitude?: number }, ms = FLY_MS) {
+      if (entered) finishIntro();
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      lastT = 0;
+      deferDetails(ms + 180);
+      sampleFlight(ms);
+      world.pointOfView(pov, ms);
+      updateTiles();
+    }
+
+    // ---- 国家 / 城市的飞行与界面 ----
+    function viewFor(c) {
+      if (c.view) return c.view;
+      const f = visitedFeatures.find((x) => Number(x.id) === c.numeric);
+      if (!f) {
+        const lat = c.cities.reduce((s, x) => s + x.lat, 0) / c.cities.length;
+        const lng = c.cities.reduce((s, x) => s + x.lng, 0) / c.cities.length;
+        return { lat, lng, altitude: 0.6 };
+      }
+      const [lng, lat] = geoCentroid(f);
+      const [[w, s], [e, n]] = geoBounds(f);
+      let dLng = e - w;
+      if (dLng < 0) dLng += 360; // 跨越 180° 经线（如斐济）
+      dLng = Math.min(dLng, 90);
+      const size = Math.max(dLng * Math.cos((lat * Math.PI) / 180), n - s);
+      return { lat, lng, altitude: Math.min(1.8, Math.max(0.22, size / 38)) };
+    }
+
+    function stopRotation() {
+      clearTimeout(resumeTimer);
+      controls.autoRotate = false;
+    }
+    function syncChips() {
+      const selected = countries.find((c) => c.code === selectedCode);
+      root.querySelector("[data-country-reset]").hidden =
+        !selected || selected.cities.length > 0;
+      root.querySelectorAll("[data-cities-of]").forEach(section => {
+        section.hidden = section.dataset.citiesOf !== selectedCode;
+      });
+      root
+        .querySelectorAll("[data-country-btn]")
+        .forEach((b) => {
+          const active = b.dataset.countryBtn === selectedCode;
+          b.classList.toggle("active", active);
+          b.setAttribute("aria-pressed", String(active));
+        });
+    }
+    function hideCityUi() {
+      card.hidden = true;
+      root.querySelectorAll("[data-city]").forEach(b => {
+        b.classList.remove("active"); b.setAttribute("aria-pressed", "false");
+      });
+    }
+
+    function showCountry(code) {
+      const c = countries.find((x) => x.code === code);
+      if (!c) return;
+      selectedCode = code;
+      hideCityUi();
+      syncChips();
+      applyPolygonStyle();
+      stopRotation();
+      detailViewKey = `country:${code}`;
+      prepareCountry(c);
+      flyTo(viewFor(c));
+      root.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    }
+
+    let imageRequest = 0;
+    function showCardImage(image) {
+      const request = ++imageRequest;
+      cardImage.hidden = true;
+      cardImage.removeAttribute("src");
+      cardMedia.hidden = !image;
+      if (!image) return;
+      cardImage.alt = image.alt;
+      cardImage.style.objectPosition = image.position;
+      cardImage.style.objectFit = image.fit ?? "cover";
+      cardImage.onerror = () => {
+        if (request === imageRequest) cardMedia.hidden = true;
+      };
+      cardImage.src = image.src;
+      cardImage.hidden = false;
+    }
+
+    function showCity(code, id) {
+      const c = countries.find((x) => x.code === code);
+      const city = c?.cities.find((x) => x.id === id);
+      if (!city) return;
+      selectedCode = code;
+      syncChips();
+      applyPolygonStyle();
+      stopRotation();
+      root.querySelectorAll("[data-city]").forEach(b => {
+        const active = b.dataset.city === id;
+        b.classList.toggle("active", active); b.setAttribute("aria-pressed", String(active));
+      });
+      cardTitle.textContent = city.title;
+      cardMeta.textContent = [c.name, city.date].filter(Boolean).join(" · ");
+      cardSummary.textContent = city.summary;
+      cardLink.setAttribute("href", city.href);
+      showCardImage(city.image);
+      card.hidden = false;
+      card.focus({ preventScroll: true });
+      detailViewKey = `country:${code}`;
+      prepareCountry(c);
+      flyTo(viewFor(c));
+      root.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    }
+
+    function showOverview() {
+      selectedCode = null;
+      priorityTiles = [];
+      priorities.update(world.camera(), sunDir, [], true);
+      hideCityUi();
+      syncChips();
+      applyPolygonStyle();
+      flyTo({ altitude: 2.4 });
+      clearTimeout(resumeTimer);
+      if (!reduceMotion)
+        resumeTimer = setTimeout(
+          () => (controls.autoRotate = true),
+          FLY_MS + 1500,
+        );
+    }
+
+    function prepareCountry(country) {
+      const pov = viewFor(country);
+      priorityTiles = countryTilePlan(pov, world.camera(), coarse);
+      priorities.update(world.camera(), sunDir, priorityTiles, true);
+      priorityTiles.sort((a, b) => priorities.rank(b) - priorities.rank(a));
+      root.dataset.preloadPriority = country.code;
+      if (!tileSourceReady || pov.altitude >= 1.35) return;
+      const camera = world.camera().clone();
+      const position = world.getCoords(pov.lat, pov.lng, pov.altitude);
+      camera.position.set(position.x, position.y, position.z);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld();
+      const view = detailCache.prepare(`country:${country.code}`);
+      if (!view.tileUrl) view.tileUrl = TILE_URL;
+      view.updatePov(camera);
+    }
+
+    root.addEventListener("click", (e) => {
+      const countryBtn = e.target.closest("[data-country-btn]");
+      const cityBtn = e.target.closest("[data-city]");
+      const resetBtn = e.target.closest("[data-reset]");
+      if (countryBtn) showCountry(countryBtn.dataset.countryBtn);
+      else if (cityBtn) showCity(cityBtn.dataset.country, cityBtn.dataset.city);
+      else if (resetBtn) showOverview();
+    });
+    const albumAnimations = new WeakMap<HTMLElement, Animation>();
+    albumRoot?.addEventListener("click", event => {
+      const toggle = event.target.closest("[data-album-country]");
+      if (toggle) {
+        const openCode = toggle.getAttribute("aria-expanded") === "true" ? null : toggle.dataset.albumCountry;
+        albumRoot.querySelectorAll("[data-album-country]").forEach(button => {
+          button.setAttribute("aria-expanded", String(button.dataset.albumCountry === openCode));
+        });
+        albumRoot.querySelectorAll<HTMLElement>("[data-album-panel]").forEach(panel => {
+          albumAnimations.get(panel)?.cancel();
+          const opening = panel.dataset.albumPanel === openCode;
+          panel.hidden = !opening;
+          if (opening && !reduceMotion) {
+            const height = panel.getBoundingClientRect().height;
+            const styles = getComputedStyle(panel);
+            const animation = panel.animate([
+              { height: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: 0, overflow: 'clip' },
+              { height: `${height}px`, paddingTop: styles.paddingTop, paddingBottom: styles.paddingBottom, opacity: 1, overflow: 'clip' },
+            ], { duration: 520, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+            albumAnimations.set(panel, animation);
+          }
+        });
+        return;
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && selectedCode) showOverview();
+    });
+
+    // 开场：从远处缓缓推近
+    const start = { lat: 24, lng: 68 };
+    world.pointOfView({ ...start, altitude: reduceMotion ? 2.4 : 4 }, 0);
+    root.dataset.surface = "local";
+    root.dataset.introState = "waiting";
+
+    // 实时太阳位置，每 30 秒更新一次
+    const updateSun = () => {
+      const now = Date.now();
+      const [sLng, sLat] = sunPosAt(now);
+      const c = world.getCoords(sLat, sLng, 0);
+      sunDir.set(c.x, c.y, c.z).normalize();
+      priorities.update(world.camera(), sunDir, undefined, true);
+      timeEl.textContent =
+        "实时昼夜 · " +
+        new Date(now).toLocaleString("zh-CN", { hour12: false });
+    };
+    updateSun();
+    setInterval(updateSun, 30000);
+
+    new ResizeObserver(() =>
+      world.width(el.clientWidth).height(el.clientHeight),
+    ).observe(el);
+    new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) world.resumeAnimation();
+      else world.pauseAnimation();
+    }).observe(el);
+
+    function finishIntro(interrupted = true) {
+      if (introComplete || !entered) return;
+      clearTimeout(introTimer);
+      world.pointOfView(interrupted ? world.pointOfView() : { ...start, altitude: 2.4 }, 0);
+      introComplete = true;
+      controls.maxDistance = 420;
+      controls.autoRotate = !reduceMotion && !selectedCode;
+      root.dataset.introState = "complete";
+      // A selected destination's flight can keep the background queue paused.
+      setTimeout(() => { void startBackground(); }, 500);
+    }
+    function enterHome() {
+      if (entered) return;
+      entered = true;
+      tileSourceReady = true;
+      controls.enabled = true;
+      controls.autoRotate = false;
+      loadingEl?.remove();
+      revealHome();
+      root.dataset.homeReady = "true";
+      // Two frames ensure the cover is gone before the camera starts moving.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (introComplete) return; // A user action already took over the camera.
+        const duration = reduceMotion ? 0 : 2200;
+        root.dataset.introState = "playing";
+        deferDetails(duration + 180);
+        world.pointOfView({ ...start, altitude: 2.4 }, duration);
+        introTimer = setTimeout(() => finishIntro(false), duration + 200);
+      }));
+    }
+    loadingTitle.textContent = "Preparing the globe";
+    loadStage("Preparing the 8K globe…");
+    let backgroundStarted = false;
+    async function startBackground() {
+      if (backgroundStarted || !entered || !introComplete) return;
+      backgroundStarted = true;
+      await waitForPreloadIdle(backgroundAbort.signal, pauseBackground);
+      await imageCache.open();
+      if (!await waitForPreloadIdle(backgroundAbort.signal, pauseBackground)) return;
+      root.dataset.preloadState = "background";
+      try {
+        const overviewPlan = overviewTilePlan(overviewLevel);
+        const plans = [...overviewPlan];
+        for (const country of countries) {
+          if (!await waitForPreloadIdle(backgroundAbort.signal, pauseBackground)) return;
+          plans.push(...countryTilePlan(viewFor(country), world.camera(), coarse));
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        const result = await imageCache.preload(plans, ({ x, y, level }) => TILE_URL(x, y, level), progress => {
+          root.dataset.preloadedTiles = String(imageCache.size);
+          root.dataset.preloadTotal = String(progress.total);
+          root.dataset.preloadDone = String(progress.done);
+          root.dataset.preloadBytes = String(progress.bytes);
+        }, backgroundAbort.signal, coarse ? 1 : 2, { paused: pauseBackground, priority: () => priorityTiles, score: tile => priorities.rank(tile) });
+        root.dataset.preloadState = result.complete ? "ready" : "partial";
+      } catch (err) {
+        root.dataset.preloadState = "partial";
+        console.info("[globe] Background imagery preload paused", err);
+      }
+    }
+
+    // Only the local 8K globe belongs to the foreground critical path.
+    // No cache enumeration, imagery probe or external tiles can delay entry.
+    try {
+      loadStage("Preparing the 8K day map for display…");
+      await paintLoading();
+      renderer.initTexture(dayTexture);
+      loadStage("Preparing the 8K night map for display…");
+      await paintLoading();
+      renderer.initTexture(nightTexture);
+      loadStage("Finishing the globe lighting…");
+      await paintLoading();
+      let shaderDeadline: ReturnType<typeof setTimeout>;
+      try {
+        await Promise.race([
+          renderer.compileAsync(world.scene(), world.camera()),
+          new Promise(resolve => { shaderDeadline = setTimeout(resolve, 2000); }),
+        ]);
+      } catch (err) { console.info("[globe] Shader warmup deferred", err); }
+      finally { clearTimeout(shaderDeadline); }
+      loadStage("Ready to explore");
+    } finally {
+      enterHome();
+    }
+  }
+
+  if (root) {
+    init().catch((err) => {
+      console.error(err);
+      const l = root.querySelector("[data-globe-loading]");
+      if (l)
+        l.textContent =
+          "3D 地球加载失败，请刷新重试（需要支持 WebGL 的浏览器）";
+      if (loadingTitle) loadingTitle.textContent = "The map could not be loaded";
+      if (loadingDetail) loadingDetail.textContent = "Please check your connection and try again. A WebGL-capable browser is required.";
+      if (retryButton) retryButton.hidden = false;
+    });
+  }
+</script>

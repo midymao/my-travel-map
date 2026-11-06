@@ -1,0 +1,41 @@
+---
+---
+<div class="home-loading" data-home-loading role="status" aria-live="polite" aria-label="Preparing your travel map">
+  <div class="loading-content">
+    <svg viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true">
+      <circle cx="40" cy="40" r="29" opacity=".3" />
+      <ellipse cx="40" cy="40" rx="14" ry="29" opacity=".3" />
+      <path d="M11 40h58M17 23q23 11 46 0M17 57q23-11 46 0" opacity=".3" />
+      <circle class="orbit" cx="40" cy="40" r="35" stroke-dasharray="12 208" />
+    </svg>
+    <p class="brand">Midy's Adventure</p>
+    <h1 data-load-title>Preparing your travel map</h1>
+    <p class="detail" data-load-detail>Loading the globe and your places…</p>
+    <progress data-load-progress aria-label="Map preparation in progress"></progress>
+    <button type="button" data-load-retry hidden>Try again</button>
+  </div>
+</div>
+<script is:inline>
+  document.documentElement.dataset.homeLoadingActive = "true";
+  document.querySelector(".site-header")?.setAttribute("inert", "");
+</script>
+<noscript><style>.home-loading { display: none !important; }</style><p>Please enable JavaScript to view the interactive map.</p></noscript>
+<style>
+  :global(html[data-home-loading-active="true"]) { overflow: hidden; }
+  .home-loading { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #050505; color: #e5e9ed; }
+  .home-loading[hidden], button[hidden] { display: none; }
+  .loading-content { width: min(320px, calc(100vw - 48px)); text-align: center; }
+  svg { width: 80px; height: 80px; margin-bottom: 20px; }
+  .orbit { transform-origin: center; animation: orbit 6s linear infinite; will-change: transform; }
+  .brand { font-size: 20px; font-weight: 600; letter-spacing: .015em; }
+  h1 { margin-top: 30px; font-size: 13px; font-weight: 400; letter-spacing: .12em; }
+  .detail { min-height: 38px; font-size: 12px; line-height: 1.7; color: #929aa4; }
+  progress { width: 100%; height: 2px; border: none; background: #22262c; accent-color: #b7cbd8; }
+  progress::-webkit-progress-bar { background: #22262c; }
+  progress::-webkit-progress-value { background: #b7cbd8; transition: width .2s ease; }
+  progress::-moz-progress-bar { background: #b7cbd8; }
+  button { margin: 20px 5px 0; padding: 9px 18px; border: 1px solid #34383e; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; transition: background .2s, border-color .2s; }
+  button:is(:hover, :focus-visible) { background: #181b20; border-color: #858f9a; }
+  @keyframes orbit { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .orbit { animation: none; } }
+</style>

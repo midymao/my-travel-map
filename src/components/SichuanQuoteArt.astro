@@ -1,0 +1,37 @@
+<div class="quote-art quote-mountains" aria-hidden="true">
+  <img src="/images/sichuan-brocade-mountains-v1.png" alt="" />
+</div>
+
+<div class="quote-art quote-brocade" aria-hidden="true">
+  <svg viewBox="0 0 300 210" fill="none" preserveAspectRatio="xMaxYMid meet">
+    <defs>
+      <pattern id="sichuan-brocade-weave" width="72" height="72" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
+        <g stroke="currentColor" stroke-width=".7" stroke-linejoin="round">
+          <path d="m36 2 34 34-34 34L2 36Z" />
+          <path d="m36 12 24 24-24 24-24-24Z" opacity=".65" />
+          <path d="m36 23 13 13-13 13-13-13Z" />
+          <path d="M32 32h8v8h-8zM0 0l8 8M72 0l-8 8M0 72l8-8m64 8-8-8" opacity=".65" />
+          <path d="M0 18h9v9h9M72 18h-9v9h-9M0 54h9v-9h9m54 9h-9v-9h-9" opacity=".4" />
+        </g>
+      </pattern>
+    </defs>
+    <path fill="url(#sichuan-brocade-weave)" d="M0 0h300v210H0z" />
+    <g stroke="currentColor" stroke-width=".6" opacity=".3">
+      <path d="M278 0v210m5-210v210M291 0v210" />
+    </g>
+  </svg>
+</div>
+
+<style>
+  .quote-art { position: absolute; inset-block: 0; width: clamp(220px, 25vw, 380px); max-width: 36%; pointer-events: none; color: #737e71; }
+  .quote-art svg, .quote-art img { display: block; width: 100%; height: 100%; }
+  .quote-mountains { left: 0; width: clamp(230px, 30vw, 440px); max-width: 42%; opacity: .92; mask-image: linear-gradient(to right, #000 55%, transparent 100%); }
+  .quote-mountains img { object-fit: contain; object-position: left bottom; }
+  .quote-brocade { right: 0; opacity: .34; mask-image: linear-gradient(to left, #000 5%, transparent 95%); }
+  .mountain-line { stroke-dasharray: 1; stroke-dashoffset: 0; }
+  @media (max-width: 760px) {
+    .quote-art { max-width: 48%; width: 210px; }
+    .quote-mountains { opacity: .4; mask-image: linear-gradient(to right, #000 10%, transparent 95%); }
+    .quote-brocade { opacity: .23; mask-image: linear-gradient(to left, #000, transparent 90%); }
+  }
+</style>

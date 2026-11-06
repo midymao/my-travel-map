@@ -1,0 +1,269 @@
+---
+import type { ResidencePage } from '../data/residencePages';
+interface Props { page: ResidencePage }
+const { page } = Astro.props;
+---
+
+<main class="residence-story" data-residence-story>
+  <section class="residence-hero" aria-labelledby="residence-title">
+    <div class:list={['hero-image', { 'is-empty': !page.heroImage, 'is-contained': page.heroImage?.fit === 'contain' }]}
+      style={page.heroImage?.opacity ? `--hero-opacity:${page.heroImage.opacity};--hero-mobile-opacity:${page.heroImage.opacity * .72}` : undefined}
+      aria-hidden={!page.heroImage ? 'true' : undefined}>
+      {page.heroImage && <img src={page.heroImage.src} alt={page.heroImage.alt}
+        style={`object-position:${page.heroImage.position ?? '50% 50%'};object-fit:${page.heroImage.fit ?? 'cover'};transform:scale(${page.heroImage.scale ?? 1});filter:brightness(${page.heroImage.brightness ?? 1}) contrast(${page.heroImage.contrast ?? 1})`}
+        fetchpriority="high" />}
+    </div>
+    <div class="hero-inner">
+      <p class="eyebrow" lang="en">Residence <span aria-hidden="true">/</span> A personal geography</p>
+      <h1 id="residence-title" lang="en" aria-label={page.title}>
+        {page.titleLines.map(line => <span>{line}</span>)}
+      </h1>
+      <p class="subtitle">{page.subtitle}</p>
+      <span class="hero-rule" aria-hidden="true"></span>
+    </div>
+  </section>
+
+  <section class="introduction content-width" aria-label="地点介绍">
+    <p class="section-label" lang="en">Introduction</p>
+    <div class="intro-copy">
+      {page.introduction.map(paragraph => <p>{paragraph}</p>)}
+    </div>
+  </section>
+
+  <aside class:list={['quotation', { 'quotation-sichuan': page.quotationArt === 'sichuan', 'quotation-image': !!page.quotationBackground }]}
+    style={page.quotationBackground ? `--quotation-background:url('${page.quotationBackground}')` : undefined} aria-label="引言">
+    <span class="quote-paper" aria-hidden="true"></span>
+    <div class="quote-inner content-width">
+      {page.quotation ? <>
+        <blockquote lang={page.quotation.language ?? 'en'}><p>{page.quotationArt === 'sichuan'
+          ? page.quotation.text.match(/[^，]+，?/g)?.map(phrase => <span class="quote-phrase">{phrase}</span>)
+          : page.quotation.text}</p></blockquote>
+        <p class="quote-credit" lang={page.quotation.language ?? 'en'}>
+          {page.quotation.author}<span aria-hidden="true"> · </span>
+          <cite><a href={page.quotation.source} target="_blank" rel="noopener noreferrer">{page.quotation.work}</a></cite>
+        </p>
+      </> : <p class="quote-placeholder">引言待选</p>}
+    </div>
+  </aside>
+
+  <article class="journal content-width" aria-label="居住地正文">
+    <p class="section-label" lang="en">The journal</p>
+    <div class="journal-copy">
+      {page.sections.map((section, index) => (
+        <section class="journal-section" aria-labelledby={`journal-section-${index}`}>
+          <span class="section-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+          <h2 id={`journal-section-${index}`}>{section.title}</h2>
+          {section.paragraphs.map(paragraph => <p>{paragraph}</p>)}
+        </section>
+      ))}
+    </div>
+  </article>
+</main>
+
+<script is:inline>
+  (() => {
+    const story = document.currentScript?.previousElementSibling;
+    if (!(story instanceof HTMLElement) || !story.matches('[data-residence-story]')) return;
+    const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+    if (motionPreference.matches || !('IntersectionObserver' in window) || !story.animate) return;
+
+    const activeAnimations = new Set();
+    const easing = 'cubic-bezier(.22, 1, .36, 1)';
+    const animate = (element, keyframes, options = {}) => {
+      if (!element) return null;
+      const animation = element.animate(keyframes, {
+        duration: 900, easing, fill: 'both', ...options,
+      });
+      activeAnimations.add(animation);
+      animation.onfinish = () => {
+        // Release the compositor layer and restore the underlying CSS once settled.
+        animation.cancel();
+        activeAnimations.delete(animation);
+      };
+      return animation;
+    };
+    const rise = (element, delay = 0, distance = 20) => animate(element, [
+      { opacity: 0, transform: `translate3d(0, ${distance}px, 0)` },
+      { opacity: 1, transform: 'translate3d(0, 0, 0)' },
+    ], { delay });
+
+    // Inline initialization runs as the markup is parsed: no hidden page or JS dependency.
+    rise(story.querySelector('.eyebrow'), 40, 10);
+    story.querySelectorAll('h1 span').forEach((line, index) => rise(line, 140 + index * 120, 28));
+    rise(story.querySelector('.subtitle'), 430, 14);
+    animate(story.querySelector('.hero-rule'), [
+      { opacity: 0, transform: 'scaleX(.2)', transformOrigin: 'left' },
+      { opacity: 1, transform: 'scaleX(1)', transformOrigin: 'left' },
+    ], { delay: 520, duration: 850 });
+    const image = story.querySelector('.hero-image');
+    if (image) animate(image, [
+      { opacity: 0, transform: 'translate3d(18px, 0, 0) scale(1.035)' },
+      { opacity: getComputedStyle(image).opacity, transform: 'translate3d(0, 0, 0) scale(1)' },
+    ], { duration: 1500 });
+
+    const pending = new Map();
+    const prepare = (section, animations) => {
+      if (!section) return;
+      animations = animations.filter(Boolean);
+      animations.forEach(animation => animation.pause());
+      pending.set(section, animations);
+    };
+    const intro = story.querySelector('.introduction');
+    const revealEasing = 'cubic-bezier(.25, .46, .45, .94)';
+    prepare(intro.querySelector('.intro-copy'), [
+      animate(intro.querySelector('.section-label'), [{ opacity: 0 }, { opacity: 1 }], { duration: 1200 }),
+      ...[...intro.querySelectorAll('.intro-copy p')].map((paragraph, index) => animate(paragraph, [
+        { opacity: 0, clipPath: 'inset(0 0 100% 0)' },
+        { opacity: 1, clipPath: 'inset(0 0 0% 0)' },
+      ], { duration: 1700, delay: 120 + Math.min(index, 4) * 150, easing: revealEasing })),
+    ]);
+    const quote = story.querySelector('.quotation');
+    const paperEasing = 'cubic-bezier(.65, 0, .25, 1)';
+    const hasArt = quote.classList.contains('quotation-sichuan');
+    prepare(quote, [
+      animate(quote.querySelector('.quote-paper'), [
+        { transform: 'scaleX(0)' }, { transform: 'scaleX(1)' },
+      ], { duration: 1900, easing: paperEasing }),
+      animate(quote.querySelector('.quote-inner'), [
+        { clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)' },
+      ], { duration: hasArt ? 1400 : 1750, delay: hasArt ? 800 : 250, easing: paperEasing }),
+      ...[...quote.querySelectorAll('.quote-art')].map((art, index) => animate(art, [
+        { opacity: 0, clipPath: 'inset(0 100% 0 0)' },
+        { opacity: getComputedStyle(art).opacity, clipPath: 'inset(0 0% 0 0)' },
+      ], { duration: 1300, delay: 650 + index * 400, easing: revealEasing })),
+      ...[...quote.querySelectorAll('.mountain-line')].map((line, index) => animate(line, [
+        { strokeDashoffset: 1 }, { strokeDashoffset: 0 },
+      ], { duration: 1200, delay: 700 + index * 65, easing: revealEasing })),
+      animate(quote.querySelector('blockquote'), [{ opacity: 0 }, { opacity: 1 }], { duration: 1100, delay: hasArt ? 1050 : 450 }),
+      animate(quote.querySelector('.quote-credit'), [{ opacity: 0 }, { opacity: 1 }], { duration: 900, delay: hasArt ? 1500 : 1000 }),
+    ]);
+
+    const reveal = section => {
+      const animations = pending.get(section);
+      if (!animations) return;
+      animations.forEach(animation => animation.play());
+      pending.delete(section);
+      observer.unobserve(section);
+    };
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => { if (entry.isIntersecting) reveal(entry.target); });
+    }, { rootMargin: '0px 0px -48px 0px', threshold: 0 });
+    pending.forEach((_, section) => observer.observe(section));
+
+    // Keyboard navigation must never land on a still-transparent source link.
+    story.addEventListener('focusin', event => {
+      pending.forEach((animations, section) => {
+        if (section.contains(event.target)) {
+          animations.forEach(animation => { animation.cancel(); activeAnimations.delete(animation); });
+          pending.delete(section);
+          observer.unobserve(section);
+        }
+      });
+    });
+    const settle = () => {
+      observer.disconnect();
+      activeAnimations.forEach(animation => animation.cancel());
+      activeAnimations.clear();
+      pending.clear();
+    };
+    motionPreference.addEventListener('change', event => { if (event.matches) settle(); });
+    window.addEventListener('pagehide', settle, { once: true });
+    window.addEventListener('beforeprint', settle, { once: true });
+  })();
+</script>
+
+<style>
+  .residence-story {
+    --paper: #f0efeb;
+    --muted: #90918f;
+    --page-gutter: clamp(24px, 6vw, 96px);
+    background: #080909;
+    color: var(--paper);
+  }
+  .content-width { box-sizing: border-box; width: min(100%, 1440px); margin-inline: auto; padding-inline: var(--page-gutter); }
+  .residence-hero { position: relative; min-height: clamp(460px, 43vw, 650px); overflow: hidden; isolation: isolate; }
+  .hero-inner { position: relative; z-index: 1; box-sizing: border-box; max-width: 1440px; margin-inline: auto; padding: clamp(64px, 7vw, 108px) var(--page-gutter) 56px; }
+  .eyebrow, .section-label, .quote-credit, .section-number { font-size: 10px; line-height: 1.7; letter-spacing: .19em; font-weight: 400; }
+  .eyebrow { margin: 0 0 32px; color: #a5a7a3; text-transform: uppercase; }
+  .eyebrow span { margin-inline: 12px; color: #555b57; }
+  h1 { margin: 0; font-family: 'Bodoni MT', Didot, 'Times New Roman', serif; font-size: clamp(52px, 6.7vw, 100px); font-weight: 400; line-height: 1.02; letter-spacing: -.045em; }
+  h1 span { display: block; }
+  .subtitle { margin: 28px 0 0; font-family: 'Songti SC', STSong, SimSun, serif; font-size: clamp(17px, 1.5vw, 21px); line-height: 1.8; letter-spacing: .32em; color: #c0c3be; }
+  .hero-rule { display: block; width: 42px; height: 1px; margin-top: 36px; background: #757c74; }
+  .hero-image { position: absolute; z-index: -1; inset: 0 0 0 42%; opacity: var(--hero-opacity, .68); mask-image: linear-gradient(to right, transparent, #000 45%), linear-gradient(to bottom, #000 72%, transparent); mask-composite: intersect; }
+  .hero-image.is-contained { background: #000; mask-image: linear-gradient(to right, transparent, #000 24%), linear-gradient(to bottom, #000 85%, transparent); mask-composite: intersect; }
+  .hero-image.is-empty { background: radial-gradient(ellipse at 72% 38%, #303633 0%, #1a1e1c 40%, #080909 78%); opacity: .46; }
+  .hero-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .introduction { display: grid; grid-template-columns: 1fr 3fr; gap: 48px; padding-top: clamp(64px, 8vw, 120px); padding-bottom: clamp(88px, 10vw, 144px); }
+  .section-label { margin: 7px 0 0; color: var(--muted); text-transform: uppercase; }
+  .intro-copy { max-width: 740px; font-family: 'Songti SC', STSong, SimSun, serif; font-size: clamp(17px, 1.55vw, 21px); line-height: 2.2; letter-spacing: .06em; color: #d0d2ce; }
+  .intro-copy p { margin: 0 0 20px; }
+  .intro-copy p:last-child { margin-bottom: 0; }
+  .quotation { position: relative; isolation: isolate; color: #151715; }
+  .quote-paper { position: absolute; inset: 0; background: var(--paper); transform-origin: left center; pointer-events: none; }
+  .quote-inner { position: relative; padding-block: 36px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .quotation-image .quote-paper {
+    background-color: var(--paper);
+    background-image: var(--quotation-background);
+    background-position: center;
+    background-size: 60% auto;
+    background-repeat: repeat;
+  }
+  blockquote { margin: 0; }
+  blockquote p { margin: 0; font-family: 'Bodoni MT', Didot, 'Times New Roman', serif; font-size: clamp(22px, 2.35vw, 34px); line-height: 1.4; font-style: italic; letter-spacing: -.02em; }
+  .quote-credit { margin: 0; letter-spacing: .04em; color: #50554f; flex-shrink: 0; }
+  .quote-placeholder { margin: 0; padding-block: 6px; font-size: 12px; line-height: 2; letter-spacing: .2em; color: #70746d; }
+  .quotation-sichuan { overflow: hidden; }
+  .quotation-sichuan .quote-inner { min-height: 196px; padding-block: 48px; flex-direction: column; justify-content: center; gap: 22px; text-align: center; }
+  .quotation-sichuan.quotation-image { aspect-ratio: 6 / 1; }
+  .quotation-sichuan.quotation-image .quote-paper {
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+  }
+  .quotation-sichuan.quotation-image .quote-inner {
+    box-sizing: border-box;
+    min-height: 0;
+    height: 100%;
+    padding: clamp(12px, 2.2vw, 36px) clamp(76px, 14vw, 270px);
+  }
+  .quotation-sichuan blockquote { max-width: 100%; }
+  .quotation-sichuan blockquote p { font-size: clamp(22px, 2.25vw, 32px); line-height: 1.65; }
+  .quote-phrase { display: inline-block; white-space: nowrap; }
+  .quotation-sichuan .quote-credit { font-size: 11px; letter-spacing: .1em; }
+  blockquote[lang="zh-CN"] p { font-family: 'Songti SC', STSong, SimSun, serif; font-style: normal; letter-spacing: .06em; }
+  cite { font-style: normal; }
+  .quote-credit a { color: inherit; text-decoration-color: #a5aaa1; text-underline-offset: 4px; transition: color .2s; }
+  .quote-credit a:hover { color: #000; }
+  .quote-credit a:focus-visible { outline: 1px solid currentColor; outline-offset: 5px; }
+  .journal { display: grid; grid-template-columns: 1fr 3fr; gap: 48px; padding-top: clamp(80px, 9vw, 128px); padding-bottom: clamp(120px, 16vw, 240px); min-height: 480px; }
+  .journal-copy { max-width: 740px; }
+  .journal-section + .journal-section { margin-top: 80px; }
+  .section-number { display: block; margin-bottom: 16px; color: #777d76; }
+  h2 { margin: 0 0 28px; font-family: 'Songti SC', STSong, SimSun, serif; font-weight: 400; font-size: clamp(24px, 2.5vw, 34px); line-height: 1.5; letter-spacing: .12em; }
+  .journal-section > p { margin: 0 0 24px; font-size: 16px; line-height: 2.1; letter-spacing: .03em; color: #a8ada6; }
+  @media (min-width: 1600px) { .hero-image { right: calc((100vw - 1600px) / 2); } }
+  @media (max-width: 760px) {
+    .residence-hero { min-height: 470px; }
+    .hero-inner { padding-top: 64px; }
+    .eyebrow { font-size: 8px; letter-spacing: .13em; margin-bottom: 36px; }
+    .eyebrow span { margin-inline: 8px; }
+    h1 { font-size: clamp(40px, 9.5vw, 68px); }
+    .hero-image { inset: 0 0 0 20%; opacity: var(--hero-mobile-opacity, .48); }
+    .hero-image.is-contained { inset: 158px -4% 0 26%; }
+    .subtitle { margin-top: 24px; }
+    .introduction, .journal { grid-template-columns: 1fr; gap: 28px; }
+    .intro-copy { font-size: 17px; }
+    .quote-inner { align-items: flex-start; flex-direction: column; gap: 18px; padding-block: 30px; }
+    .quote-credit { font-size: 10px; }
+    .quotation-sichuan .quote-inner { padding-block: 38px; align-items: center; gap: 20px; min-height: 210px; }
+    .quotation-sichuan.quotation-image .quote-inner {
+      min-height: 0;
+      padding: 12px 46px;
+      gap: 8px;
+    }
+    .quotation-sichuan.quotation-image { aspect-ratio: 4 / 1; }
+    .quotation-sichuan blockquote { max-width: 300px; }
+    .quotation-sichuan blockquote p { font-size: clamp(20px, 5.2vw, 26px); line-height: 1.85; }
+    .quotation-sichuan .quote-credit { font-size: 9px; letter-spacing: .03em; }
+  }
+</style>

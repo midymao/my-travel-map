@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2172" height="362" viewBox="0 0 2172 362" fill="none">
+  <rect width="2172" height="362" fill="#FBFAF5"/>
+
+  <!-- quiet riverbanks -->
+  <path d="M0 62C126 62 186 54 272 70C356 86 417 89 520 78" stroke="#81979D" stroke-width="2" opacity=".55"/>
+  <path d="M0 72C112 72 191 66 265 80C340 94 419 98 495 90" stroke="#A8B8BA" stroke-width="1" opacity=".65"/>
+  <path d="M0 292C118 292 177 305 263 289C354 273 429 271 532 285" stroke="#81979D" stroke-width="2" opacity=".55"/>
+  <path d="M0 302C122 302 182 315 270 299C353 284 417 284 502 295" stroke="#A8B8BA" stroke-width="1" opacity=".65"/>
+
+  <!-- abstract water-network on the left -->
+  <path d="M56 167H145L195 128H302L360 167H457" stroke="#6E878D" stroke-width="2" opacity=".8"/>
+  <path d="M67 192H151L204 229H313L369 192H462" stroke="#6E878D" stroke-width="2" opacity=".8"/>
+  <path d="M145 167V192M204 128V229M302 128V229M369 167V192" stroke="#9BACAF" stroke-width="1" opacity=".65"/>
+  <circle cx="145" cy="167" r="3" fill="#6E878D" opacity=".8"/>
+  <circle cx="369" cy="192" r="3" fill="#6E878D" opacity=".8"/>
+
+  <!-- slanted Jiangnan bridge -->
+  <path d="M185 223C224 163 286 129 358 115" stroke="#465E64" stroke-width="3" opacity=".9"/>
+  <path d="M195 228C240 204 291 188 350 181" stroke="#81979D" stroke-width="1.5" opacity=".9"/>
+  <path d="M211 210L223 219M237 185L249 194M267 162L278 172M299 143L310 153M329 126L340 136" stroke="#465E64" stroke-width="1.5" opacity=".8"/>
+  <path d="M174 236C227 249 303 247 376 218" stroke="#A8B8BA" stroke-width="1.5" opacity=".8"/>
+
+  <!-- fine canals arriving at the far right -->
+  <path d="M1644 83C1731 79 1770 94 1829 112C1885 129 1963 130 2172 94" stroke="#81979D" stroke-width="2" opacity=".55"/>
+  <path d="M1664 102C1721 103 1771 119 1824 138C1881 158 1975 153 2172 120" stroke="#A8B8BA" stroke-width="1" opacity=".7"/>
+  <path d="M1633 267C1724 269 1787 251 1837 229C1899 203 1979 207 2172 247" stroke="#81979D" stroke-width="2" opacity=".55"/>
+  <path d="M1661 286C1729 288 1782 268 1835 248C1900 223 1983 229 2172 268" stroke="#A8B8BA" stroke-width="1" opacity=".7"/>
+
+  <!-- distant three-stone-tower mark -->
+  <g stroke="#465E64" stroke-linecap="round" stroke-linejoin="round" opacity=".88">
+    <path d="M1872 188V141L1881 129L1890 141V188" stroke-width="2"/>
+    <path d="M1911 195V120L1922 106L1933 120V195" stroke-width="2.5"/>
+    <path d="M1952 188V141L1961 129L1970 141V188" stroke-width="2"/>
+    <path d="M1864 188H1898M1902 195H1942M1944 188H1978" stroke-width="1.5"/>
+  </g>
+  <path d="M1844 212C1887 202 1932 202 1986 212C2022 219 2042 225 2066 233" stroke="#6E878D" stroke-width="2" opacity=".75"/>
+  <path d="M1848 225C1890 216 1932 216 1980 225C2015 232 2041 241 2075 251" stroke="#A8B8BA" stroke-width="1.2" opacity=".8"/>
+
+  <!-- restrained frame lines -->
+  <path d="M32 32H2140M32 330H2140" stroke="#81979D" stroke-width="1" opacity=".38"/>
+  <path d="M32 32V54M2140 32V54M32 308V330M2140 308V330" stroke="#81979D" stroke-width="1" opacity=".38"/>
+</svg>

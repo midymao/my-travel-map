@@ -1,0 +1,37 @@
+---
+import Base from "../../layouts/Base.astro";
+import { residences } from "../../data/residences";
+import ResidenceStory from "../../components/ResidenceStory.astro";
+import { yangtzeDeltaPage, sichuanBasinPage, henanProvincePage, easternAustraliaPage } from "../../data/residencePages";
+
+export function getStaticPaths() {
+  return residences.map(({ slug, name }) => ({
+    params: { region: slug },
+    props: { name },
+  }));
+}
+
+const { name } = Astro.props;
+const page = Astro.params.region === 'yangtze-delta-metropolitan' ? yangtzeDeltaPage
+  : Astro.params.region === 'sichuan-basin' ? sichuanBasinPage
+  : Astro.params.region === 'henan-province' ? henanProvincePage
+  : Astro.params.region === 'eastern-australia' ? easternAustraliaPage : null;
+---
+
+<Base title={`${name} · Midy's Adventure`} flush={!!page}>
+  {page ? <ResidenceStory page={page} /> : <h1 class="sr-only">{name}</h1>}
+</Base>
+
+<style>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>

@@ -1,0 +1,40 @@
+---
+import { countryAlbumDecks } from '../data/countryAlbums';
+import CountryPhotoDeck from './CountryPhotoDeck.astro';
+const { countries } = Astro.props;
+// Only dedicated photo decks appear on the homepage. Filter before pairing rows.
+const albums = countries.filter(country => countryAlbumDecks[country.code]?.photos.length > 0);
+const rows = Array.from({ length: Math.ceil(albums.length / 2) }, (_, i) => albums.slice(i * 2, i * 2 + 2));
+---
+
+{albums.length > 0 && <section class="travel-albums" data-travel-albums aria-label="国家旅行图册">
+  <div class="album-rows">
+    {rows.map(row => (
+      <div class="album-row">
+        {row.map(country => (
+          <article class="album-entry">
+            <CountryPhotoDeck country={country} photos={countryAlbumDecks[country.code].photos} />
+          </article>
+        ))}
+      </div>
+    ))}
+  </div>
+</section>}
+
+<style>
+  .travel-albums { max-width: 1600px; box-sizing: border-box; margin: 0 auto; padding: clamp(64px, 7vw, 112px) clamp(24px, 5vw, 88px) 100px; }
+  .album-rows { display: flex; flex-direction: column; gap: clamp(48px, 5vw, 80px); }
+  .album-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px clamp(32px, 4vw, 64px); }
+  .album-entry { display: contents; }
+  .album-entry:first-child > :global(.country-photo-deck) { grid-row: 1; grid-column: 1; }
+  .album-entry:nth-child(2) > :global(.country-photo-deck) { grid-row: 1; grid-column: 2; }
+  @media (max-width: 900px) and (orientation: portrait) {
+    .travel-albums { padding: 52px 26px 64px; }
+    .album-row { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    .album-entry:first-child > :global(.country-photo-deck), .album-entry:nth-child(2) > :global(.country-photo-deck) { grid-column: auto; grid-row: auto; }
+  }
+  @media (max-width: 900px) and (orientation: landscape) {
+    .travel-albums { padding-inline: 28px; }
+    .album-row { column-gap: 28px; }
+  }
+</style>

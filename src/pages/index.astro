@@ -1,13 +1,24 @@
 ---
 import Base from "../layouts/Base.astro";
-import WorldMap from "../components/WorldMap.astro";
+import HomeGlobe from "../components/HomeGlobe.astro";
+import HomeLoading from "../components/HomeLoading.astro";
 ---
 
-<Base title="我的旅行地图" description="一张世界地图，记录我去过的地方。">
-  <h1>我的旅行地图</h1>
-  <p style="opacity:.7">点亮的国家是去过的地方，点一下圆点看详情。</p>
-  <WorldMap />
-  <p style="margin-top:2rem">
-    <a href="/places/" style="color:#9ecbff">按列表浏览所有地点 →</a>
-  </p>
+<Base
+  title="Midy's Travel Map"
+  description="一颗会转动的地球，记录我去过的国家和城市。"
+  flush
+>
+  <HomeLoading />
+  <div data-home-content>
+  <HomeGlobe />
+  <main style="max-width:860px;margin:0 auto;padding:1rem 1.5rem 5rem">
+    <p><a href="/places/" style="color:#9ecbff">查看全部地点 →</a></p>
+    <p style="margin-top:4rem;font-size:.75rem;opacity:.4;line-height:1.7">
+      地球影像：NASA Blue Marble 与 Solar System Scope（CC BY 4.0）。<br />
+      高清卫星影像：<a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" style="color:inherit">Esri World Imagery</a>，来源包括 Esri、Maxar、Earthstar Geographics 及 GIS 用户社区。
+      <br />中国省级边界：<a href="https://geojson.cn/data/atlas/tiandi" style="color:inherit">GeoJSON.CN（天地图数据）</a>。
+    </p>
+  </main>
+  </div>
 </Base>

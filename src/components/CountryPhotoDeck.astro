@@ -1,0 +1,247 @@
+---
+import type { CountryAlbumPhoto } from '../data/countryAlbums';
+interface Props { country: { code: string; name: string; cities: { id: string; title: string; href: string }[] }; photos: CountryAlbumPhoto[] }
+const { country, photos } = Astro.props;
+const englishTitles: Record<string, string> = {
+  salzburg: 'Salzburg', vienna: 'Vienna', vatican: 'Vatican City', budapest: 'Budapest',
+  baghdad: 'Baghdad', vientiane: 'Vientiane', 'luang-prabang': 'Luang Prabang',
+  fiji: 'Fiji', dubai: 'Dubai', sydney: 'Sydney', melbourne: 'Melbourne', adelaide: 'Adelaide',
+  canberra: 'Canberra', 'great-barrier-reef': 'Great Barrier Reef',
+  rome: 'Rome', florence: 'Florence', milan: 'Milan',
+  istanbul: 'Istanbul', tehran: 'Tehran',
+  belgrade: 'Belgrade', bratislava: 'Bratislava', sarajevo: 'Sarajevo',
+};
+const slides = photos.map(photo => {
+  const city = country.cities.find(city => city.id === photo.cityId);
+  if (!city) throw new Error(`Missing city ${photo.cityId} in ${country.code} photo deck`);
+  return { ...photo, title: city.title, titleEn: englishTitles[city.id] ?? city.id.replaceAll('-', ' '), href: city.href };
+});
+const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 1.2));
+---
+
+<div class="country-photo-deck" id={'album-trigger-' + country.code} data-country-photo-deck={country.code} data-slides={JSON.stringify(slides)} role="group" aria-label={country.name + '旅行图册'}>
+  <div class="deck-stage">
+    {slides.map((slide, index) => (
+      <a class:list={['deck-photo', { 'is-front': index === initialIndex, 'is-portrait': slide.aspectRatio < 1 }]} data-deck-photo={index} href={slide.href}
+        aria-label={index === initialIndex ? '打开' + country.name + '图册' : '选择' + slide.title + '照片 ' + (index + 1)}
+        tabindex={index === initialIndex ? 0 : -1} style={'--ratio:' + slide.aspectRatio}>
+        <img src={slide.src} alt="" loading="lazy" decoding="async" width={Math.round(800 * slide.aspectRatio)} height="800" style={'object-position:' + (slide.position ?? '50% 50%')} />
+        <span class="photo-caption"><span class="caption-names"><span class="caption-en" lang="en">{slide.titleEn}</span><span class="caption-zh" lang="zh-CN">{slide.title}</span></span><span class="visit-arrow" aria-hidden="true">↗</span></span>
+      </a>
+    ))}
+  </div>
+  <p class="deck-status" data-deck-status aria-live="polite" aria-atomic="true"></p>
+</div>
+
+<script>
+  import { PhotoDeckState, type DeckSlide } from './photoDeckState';
+  document.querySelectorAll<HTMLElement>('[data-country-photo-deck]').forEach(root => {
+    const slides: DeckSlide[] = JSON.parse(root.dataset.slides!);
+    const state = new PhotoDeckState(slides);
+    const cards = [...root.querySelectorAll<HTMLAnchorElement>('[data-deck-photo]')];
+    const status = root.querySelector<HTMLElement>('[data-deck-status]')!;
+    const name = root.getAttribute('aria-label')!.replace('旅行图册', '');
+    let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+    let openedAt = 0;
+    let settleUntil = 0;
+    let lastPointer: { x: number; y: number } | undefined;
+    let lockedPointer: { x: number; y: number } | undefined;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const motion = new Map<HTMLAnchorElement, Animation>();
+    const duration = 860;
+    const stopMotion = () => {
+      motion.forEach((animation, card) => {
+        animation.cancel(); card.style.removeProperty('will-change');
+        card.style.zIndex = String(card.classList.contains('is-front') ? 10 : 5 - Number(card.dataset.slot));
+      });
+      motion.clear();
+    };
+    const cancelHover = () => { clearTimeout(hoverTimer); hoverTimer = undefined; };
+    const render = (announce = false) => {
+      root.classList.toggle('is-open', state.isOpen);
+      root.classList.toggle('has-portrait-cover', slides[state.visibleIndex].aspectRatio < 1);
+      cards.forEach((card, index) => {
+        const front = index === state.visibleIndex;
+        const slot = state.slots[index];
+        card.classList.toggle('is-front', front);
+        card.dataset.slot = String(slot);
+        card.style.zIndex = String(front ? 10 : 5 - slot);
+        card.tabIndex = state.isOpen || front ? 0 : -1;
+        card.setAttribute('aria-label', front ? state.isOpen ? '进入' + slides[index].title + '页面' : '打开' + name + '图册' : '选择' + slides[index].title + '照片 ' + (index + 1));
+        if (front) card.setAttribute('aria-expanded', String(state.isOpen));
+        else card.removeAttribute('aria-expanded');
+      });
+      if (announce) status.textContent = state.isOpen ? '当前照片：' + slides[state.selectedIndex].title + '。点击封面进入页面。' : '图册已收起。';
+    };
+    // Sample the current visual pose, including an unfinished animation, before cancelling it.
+    const measure = () => cards.map(card => {
+      const matrix = new DOMMatrix(getComputedStyle(card).transform);
+      const width = card.offsetWidth, height = card.offsetHeight;
+      return {
+        x: card.offsetLeft + width / 2 + matrix.e,
+        y: card.offsetTop + height / 2 + matrix.f,
+        width: width * Math.hypot(matrix.a, matrix.b),
+        height: height * Math.hypot(matrix.c, matrix.d),
+        angle: Math.atan2(matrix.b, matrix.a) * 180 / Math.PI,
+        transform: matrix.toString(),
+      };
+    });
+    const animateLayout = (update: () => void, incoming = -1, outgoing = -1) => {
+      const before = measure();
+      root.classList.add('is-reordering');
+      stopMotion();
+      update(); render(true);
+      // Layout is resolved once. During playback only transform changes, never geometry.
+      const after = measure();
+      const timing = incoming < 0 ? 680 : duration;
+      settleUntil = performance.now() + (reducedMotion.matches ? 0 : timing);
+      if (!reducedMotion.matches) cards.forEach((card, index) => {
+        const from = before[index], to = after[index];
+        if (Math.abs(from.x - to.x) + Math.abs(from.y - to.y) + Math.abs(from.width - to.width) + Math.abs(from.height - to.height) + Math.abs(from.angle - to.angle) < .1) return;
+        const width = card.offsetWidth, height = card.offsetHeight;
+        const dx = from.x - (card.offsetLeft + width / 2), dy = from.y - (card.offsetTop + height / 2);
+        const sx = from.width / width, sy = from.height / height;
+        const frames: Keyframe[] = [
+          { transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + from.angle + 'deg) scale(' + sx + ',' + sy + ')' },
+          { transform: to.transform },
+        ];
+        if (incoming >= 0 && (index === incoming || index === outgoing)) {
+          frames.splice(1, 0, {
+            transform: 'translate(' + dx * .32 + 'px,' + (dy * .32 - (index === incoming ? 15 : -5)) + 'px) rotate(' + (from.angle * .32 + to.angle * .68) + 'deg) scale(' + (1 + (sx - 1) * .32) + ',' + (1 + (sy - 1) * .32) + ')', offset: .58,
+          });
+          if (index === outgoing) card.style.zIndex = '9';
+        }
+        card.style.willChange = 'transform';
+        const animation = card.animate(frames, { duration: timing, easing: 'cubic-bezier(.22,.75,.2,1)' });
+        motion.set(card, animation);
+        animation.onfinish = () => {
+          motion.delete(card); card.style.removeProperty('will-change');
+          card.style.zIndex = String(card.classList.contains('is-front') ? 10 : 5 - Number(card.dataset.slot));
+        };
+      });
+      root.classList.remove('is-reordering');
+    };
+    const select = (index: number) => {
+      cancelHover();
+      if (!state.isOpen || state.selectedIndex === index || motion.size) return;
+      const previousIndex = state.selectedIndex;
+      lockedPointer = lastPointer && { ...lastPointer };
+      animateLayout(() => state.select(index), index, previousIndex);
+    };
+    const close = (restoreFocus = false) => {
+      if (!state.isOpen) return;
+      cancelHover(); lockedPointer = undefined;
+      animateLayout(() => state.close());
+      if (restoreFocus) cards[state.coverIndex].focus({ preventScroll: true });
+    };
+    cards.forEach((card, index) => {
+      const queueHover = (event: PointerEvent) => {
+        lastPointer = { x: event.clientX, y: event.clientY };
+        if (!state.isOpen || event.pointerType !== 'mouse' || state.selectedIndex === index || performance.now() < settleUntil) return;
+        if (lockedPointer && Math.hypot(event.clientX - lockedPointer.x, event.clientY - lockedPointer.y) < 12) return;
+        lockedPointer = undefined;
+        if (!hoverTimer) hoverTimer = setTimeout(() => select(index), 140);
+      };
+      card.addEventListener('pointerenter', queueHover);
+      card.addEventListener('pointermove', queueHover);
+      card.addEventListener('pointerleave', cancelHover);
+      card.addEventListener('click', event => {
+        if (!state.isOpen) {
+          event.preventDefault(); openedAt = performance.now();
+          animateLayout(() => state.open());
+          document.dispatchEvent(new CustomEvent('country-photo-deck-open', { detail: root.dataset.countryPhotoDeck }));
+        } else if (state.selectedIndex !== index) {
+          event.preventDefault(); select(index);
+        } else if (performance.now() - openedAt < 700 || performance.now() < settleUntil) event.preventDefault();
+      });
+      card.addEventListener('focus', () => { if (state.isOpen) select(index); });
+    });
+    root.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && state.isOpen) { event.preventDefault(); event.stopPropagation(); close(true); }
+      else if (state.isOpen && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+        event.preventDefault();
+        const index = (state.selectedIndex + (event.key === 'ArrowRight' ? 1 : -1) + slides.length) % slides.length;
+        select(index); cards[index].focus({ preventScroll: true });
+      } else if (event.key === ' ' && event.target instanceof HTMLAnchorElement) { event.preventDefault(); event.target.click(); }
+    });
+    root.addEventListener('focusout', () => setTimeout(() => { if (!root.contains(document.activeElement)) close(); }, 0));
+    document.addEventListener('pointerdown', event => { if (event.target instanceof Node && !root.contains(event.target)) close(); });
+    document.addEventListener('country-photo-deck-open', event => { if ((event as CustomEvent).detail !== root.dataset.countryPhotoDeck) close(); });
+    // Decode nearby deck photographs before the first interaction without blocking the page.
+    const warmImages = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      root.querySelectorAll<HTMLImageElement>('img').forEach(image => { void image.decode().catch(() => {}); });
+      warmImages.disconnect();
+    }, { rootMargin: '350px' });
+    warmImages.observe(root);
+    window.addEventListener('resize', stopMotion, { passive: true });
+    reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) stopMotion(); });
+    render();
+  });
+</script>
+
+<style>
+  .country-photo-deck { position: relative; min-width: 0; width: 100%; box-sizing: border-box; padding: 60px 30px 14px; }
+  .deck-stage { position: relative; width: 100%; aspect-ratio: 3 / 2; isolation: isolate; }
+  .deck-photo { position: absolute; display: block; left: 12%; top: -3%; width: 78%; height: calc(117% / var(--ratio)); aspect-ratio: var(--ratio); border-radius: 24px; overflow: hidden; background: #101313; box-shadow: 0 8px 24px #0005, 0 1px 4px #0003; transform: rotate(-4deg); transform-origin: 50% 50%; pointer-events: none; -webkit-tap-highlight-color: transparent; transition: transform .6s cubic-bezier(.22,1,.36,1); }
+  .deck-photo.is-portrait { width: 38%; height: calc(57% / var(--ratio)); }
+  .deck-photo[data-slot="0"] { left: 0; top: -3%; transform: rotate(-6deg); }
+  .deck-photo[data-slot="1"] { left: 22%; top: -4%; transform: rotate(6deg); }
+  .deck-photo[data-slot="1"].is-portrait { left: 62%; }
+  .deck-photo[data-slot="2"] { left: 12%; top: -7%; transform: rotate(-3deg); }
+  .deck-photo[data-slot="3"] { left: 22%; top: -8%; transform: rotate(3deg); }
+  .deck-photo.is-front { left: 0; top: 0; width: 100%; height: 100%; aspect-ratio: auto; transform: rotate(0); pointer-events: auto; box-shadow: 0 12px 28px #0005, 0 2px 5px #0003; }
+  /* Portrait covers keep their native ratio inside the same fixed landscape stage. */
+  .deck-photo.is-front.is-portrait { width: calc(65.3333% * var(--ratio)); left: calc(50% - 32.6667% * var(--ratio)); top: 2%; height: 98%; }
+  .has-portrait-cover:not(.is-open) .deck-photo:not(.is-front) { width: 60%; height: calc(90% / var(--ratio)); }
+  .has-portrait-cover:not(.is-open) .deck-photo.is-portrait:not(.is-front) { width: 34%; height: calc(51% / var(--ratio)); }
+  .has-portrait-cover:not(.is-open) [data-slot="0"] { left: 16%; top: 5%; }
+  .has-portrait-cover:not(.is-open) [data-slot="1"] { left: 25%; top: 4%; }
+  .has-portrait-cover:not(.is-open) [data-slot="1"].is-portrait { left: 50%; }
+  .has-portrait-cover:not(.is-open) [data-slot="2"] { left: 19%; top: -3%; }
+  .has-portrait-cover:not(.is-open) [data-slot="3"] { left: 23%; top: -5%; }
+  .deck-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .deck-photo:focus-visible { outline: 2px solid #d4e3e9; outline-offset: 4px; }
+  .photo-caption { position: absolute; inset: 0 0 auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; box-sizing: border-box; padding: 13px 16px 28px; background: linear-gradient(180deg, #05090c99, transparent); color: #fff; text-shadow: 0 1px 7px #0007; opacity: 0; transform: translateY(-4px); transition: opacity .35s ease, transform .5s cubic-bezier(.22,1,.36,1); pointer-events: none; }
+  .caption-names { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .caption-en { font: italic 17px/1.12 Georgia, 'Times New Roman', serif; letter-spacing: .015em; text-wrap: balance; }
+  .caption-zh { font: 11px/1.5 'Songti SC', 'Noto Serif CJK SC', SimSun, serif; letter-spacing: .2em; }
+  .visit-arrow { display: none; font: 15px/1 Georgia, serif; opacity: .75; margin-bottom: 3px; }
+  .is-open .deck-photo { pointer-events: auto; width: 74%; height: calc(111% / var(--ratio)); }
+  .is-open .deck-photo.is-portrait { width: 39%; height: calc(58.5% / var(--ratio)); }
+  .is-open [data-slot="0"] { left: 0; top: 3%; transform: rotate(-8deg); }
+  .is-open [data-slot="1"] { left: 25%; top: -2%; transform: rotate(7deg); }
+  .is-open [data-slot="1"].is-portrait { left: 61%; }
+  .is-open [data-slot="2"] { left: 7%; top: -9%; transform: rotate(-4deg); }
+  .is-open [data-slot="3"] { left: 21%; top: -15%; transform: rotate(4deg); }
+  .is-open .deck-photo.is-front { left: 6%; top: 14%; width: 88%; height: 86%; transform: rotate(0); }
+  .is-open .deck-photo.is-front.is-portrait { width: calc(65.3333% * var(--ratio)); left: calc(50% - 32.6667% * var(--ratio)); top: 2%; height: 98%; }
+  .is-open .deck-photo.is-front .photo-caption,
+  .is-open .deck-photo:not(.is-front):hover .photo-caption,
+  .is-open .deck-photo:focus-visible .photo-caption { opacity: 1; transform: translateY(0); }
+  .is-open .is-front .photo-caption { top: auto; bottom: 0; padding: 38px 20px 18px; background: linear-gradient(0deg, #05090cb3, #05090c30 65%, transparent); }
+  .is-open .is-front .caption-en { font-size: clamp(21px, 2vw, 29px); }
+  .is-open .is-front .caption-zh { font-size: 12px; letter-spacing: .25em; }
+  .is-open .is-front .visit-arrow { display: inline; }
+  .is-reordering .deck-photo { transition: none; }
+  .deck-status { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (hover: hover) and (pointer: fine) {
+    .country-photo-deck:not(.is-open):hover [data-slot="0"] { transform: translate(-3%,-5%) rotate(-10deg); }
+    .country-photo-deck:not(.is-open):hover [data-slot="1"] { transform: translate(3%,-5%) rotate(10deg); }
+    .country-photo-deck:not(.is-open):hover [data-slot="2"] { transform: translate(-2%,-5%) rotate(-5deg); }
+    .country-photo-deck:not(.is-open):hover [data-slot="3"] { transform: translate(2%,-5%) rotate(5deg); }
+    .country-photo-deck:not(.is-open):hover .is-front { transform: translateY(-6px); }
+  }
+  @media (max-width: 900px) and (orientation: portrait) {
+    .country-photo-deck { padding: 48px 24px 12px; }
+    .deck-photo { border-radius: 18px; }
+    .photo-caption { padding: 9px 10px 22px; }
+    .caption-names { gap: 4px; }
+    .caption-en { font-size: 12px; }
+    .caption-zh { font-size: 9px; letter-spacing: .12em; }
+    .is-open .is-front .photo-caption { padding: 28px 13px 12px; }
+    .is-open .is-front .caption-en { font-size: 20px; }
+    .is-open .is-front .caption-zh { font-size: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .deck-photo, .photo-caption { transition: none; } }
+</style>
