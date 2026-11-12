@@ -5,14 +5,13 @@ import { createSurfaceMaterial } from './earthSurface';
 
 interface SurfaceOptions {
   day: Texture;
-  night: Texture;
-  sun: Vector3;
   anisotropy: number;
   order: number;
   reduceMotion: boolean;
   canUpload: () => boolean;
   onResidencyChange?: () => void;
   loadImage?: (url: string) => Promise<HTMLImageElement>;
+  uploadTexture?: (texture: Texture) => void;
   uploadBudget?: number;
 }
 
@@ -21,6 +20,8 @@ export class SurfaceTiles extends SlippyMapGlobe {
   private pending: Mesh[] = [];
   private uploadFrame = 0;
   private surface: SurfaceOptions;
+  private tileRadius: number;
+  private eyeDirection = new Vector3();
 
   get loadedTileCount() {
     return this.children.filter(child => child instanceof Mesh && child.material?.uniforms?.surfaceOpacity).length;
@@ -52,6 +53,7 @@ export class SurfaceTiles extends SlippyMapGlobe {
   constructor(radius: number, surface: SurfaceOptions, config: ConfigOptions) {
     super(radius, config);
     this.surface = surface;
+    this.tileRadius = radius;
     if (surface.loadImage) {
       // The local engine adapter accepts an instance loader, so both foreground
       // and background tiles use the same disk cache and in-flight requests.
@@ -96,45 +98,52 @@ export class SurfaceTiles extends SlippyMapGlobe {
   }
 
   private scheduleUploads() {
-    if (this.uploadFrame || !this.visible) return;
+    if (this.uploadFrame || !this.pending.length || !this.visible || !this.surface.canUpload()) return;
     this.uploadFrame = requestAnimationFrame(() => {
       this.uploadFrame = 0;
       if (this.visible && this.surface.canUpload()) {
         let budget = this.surface.uploadBudget ?? 2;
+        const deadline = performance.now() + 3;
         while (budget > 0 && this.pending.length) {
           const object = this.pending.shift()!;
           if (object.userData.surfaceDisposed) continue;
+          if (object.userData.buildTileGeometry) {
+            // The placeholder has never been rendered and owns no GPU data.
+            object.geometry = object.userData.buildTileGeometry();
+            delete object.userData.buildTileGeometry;
+          }
           const previous = object.material as any;
           const texture = previous.map as Texture;
           texture.anisotropy = this.surface.anisotropy;
-          const material = createSurfaceMaterial(
-            this.surface.day, this.surface.night, this.surface.sun, texture,
-          );
+          const material = createSurfaceMaterial(this.surface.day, texture);
           // Keep a map reference for the upstream resource disposer.
           (material as any).map = texture;
+          // Culled tiles should already be GPU-resident when rotation reveals them.
+          this.surface.uploadTexture?.(texture);
           material.transparent = true;
           material.depthWrite = false;
           material.polygonOffset = true;
           material.polygonOffsetFactor = -1;
           material.polygonOffsetUnits = -1;
           object.material = material;
+          object.geometry.computeBoundingSphere();
+          object.userData.surfaceTile = true;
           const width = (object.geometry as any).parameters.phiLength;
           const level = Math.round(Math.log2(2 * Math.PI / width));
           // Transparent country outlines use order 0; tiles must precede them.
           object.renderOrder = this.surface.order + level;
-          let firstFrame: number | undefined;
+          const uploadedAt = performance.now();
           object.onBeforeRender = () => {
-            const now = performance.now();
-            firstFrame ??= now;
             material.uniforms.surfaceOpacity.value = this.surface.reduceMotion
-              ? 1 : Math.min(1, (now - firstFrame) / 240);
+              ? 1 : Math.min(1, (performance.now() - uploadedAt) / 240);
           };
           previous.dispose();
           super.add(object);
           budget--;
+          if (performance.now() >= deadline) break;
         }
       }
-      if (this.pending.length && this.visible) this.scheduleUploads();
+      if (this.pending.length) this.scheduleUploads();
     });
   }
 
@@ -146,6 +155,23 @@ export class SurfaceTiles extends SlippyMapGlobe {
       if (child instanceof Mesh && child.material?.uniforms?.surfaceOpacity) {
         child.material.depthWrite = false;
       }
+    }
+  }
+
+  updateHorizonVisibility(eye: Vector3, occluderRadius: number) {
+    if (!this.visible) return;
+    const distance = eye.length();
+    const cull = distance > occluderRadius && this.tileRadius >= occluderRadius;
+    const tangent = cull ? occluderRadius / distance : 0;
+    this.eyeDirection.copy(eye).multiplyScalar(cull ? 1 / distance : 0);
+    // Expand the horizon to account for tiles sitting above the opaque globe.
+    const horizon = occluderRadius * tangent -
+      Math.sqrt(Math.max(0, (1 - tangent ** 2) * (this.tileRadius ** 2 - occluderRadius ** 2)));
+    for (const child of this.children) {
+      if (!(child instanceof Mesh) || !child.userData.surfaceTile) continue;
+      const bounds = child.geometry.boundingSphere;
+      // Only skip meshes whose entire bounding sphere lies behind the horizon.
+      child.visible = !cull || !bounds || bounds.center.dot(this.eyeDirection) + bounds.radius >= horizon;
     }
   }
 

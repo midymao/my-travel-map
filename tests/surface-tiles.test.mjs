@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
-import { Mesh, MeshBasicMaterial, SphereGeometry, Texture, Vector3, PerspectiveCamera } from 'three';
+import { BufferGeometry, Mesh, MeshBasicMaterial, SphereGeometry, Texture, Vector3, PerspectiveCamera } from 'three';
 
 // Run the browser-independent tile lifecycle with a deterministic frame clock.
 // Absolute imports allow TypeScript modules to run from data URLs without a
@@ -92,7 +92,7 @@ test('tile uploads pause during motion, fade in with ordered depth, and do not r
   };
   let moving = true;
   const tiles = new SurfaceTiles(100.06, {
-    day: new Texture(), night: new Texture(), sun: new Vector3(1, 0, 0),
+    day: new Texture(),
     anisotropy: 4, order: -70, reduceMotion: false, canUpload: () => !moving,
   }, {});
   const tile = level => new Mesh(
@@ -101,20 +101,30 @@ test('tile uploads pause during motion, fade in with ordered depth, and do not r
   );
   try {
     const low = tile(5), high = tile(8), third = tile(8);
+    const lowGeometry = low.geometry;
+    low.geometry = new BufferGeometry();
+    let geometryBuilt = false;
+    low.userData.buildTileGeometry = () => { geometryBuilt = true; return lowGeometry; };
     tiles.add(low, high, third);
     frame();
+    assert.equal(geometryBuilt, false, 'geometry work also waits for the camera to settle');
     assert.equal(tiles.children.includes(low), false, 'no GPU upload during motion');
+    assert.equal(frames.size, 0, 'paused uploads do not poll on every animation frame');
     moving = false;
+    tiles.resumeUploads();
     frame();
     assert.equal(tiles.children.includes(low), true);
-    assert.equal(tiles.children.includes(high), true);
+    assert.equal(low.geometry, lowGeometry);
+    assert.equal(geometryBuilt, true);
     assert.equal(tiles.children.includes(third), false, 'at most two uploads per frame');
+    for (let i = 0; i < 2 && !tiles.children.includes(high); i++) frame();
+    assert.equal(tiles.children.includes(high), true);
     assert.equal(high.material.depthWrite, false);
     assert.equal(high.material.transparent, true);
     assert.ok(high.renderOrder > low.renderOrder, 'fine tiles draw after coarse tiles');
     assert.ok(high.renderOrder < 0, 'country outlines draw after imagery');
     high.onBeforeRender();
-    assert.equal(high.material.uniforms.surfaceOpacity.value, 0, 'first frame fades from existing imagery');
+    assert.ok(high.material.uniforms.surfaceOpacity.value < 1, 'new uploads fade from existing imagery');
     high.material.depthWrite = true; // Simulate the dependency's LOD setter.
     tiles.updatePov(new PerspectiveCamera());
     assert.equal(high.material.depthWrite, false, 'LOD updates cannot restore depth fighting');
@@ -138,6 +148,42 @@ test('tile uploads pause during motion, fade in with ordered depth, and do not r
   }
 });
 
+test('tiles fully behind the opaque globe stay cached and are visible after rotation', () => {
+  const previousRequest = globalThis.requestAnimationFrame;
+  const previousCancel = globalThis.cancelAnimationFrame;
+  const frames = [];
+  globalThis.requestAnimationFrame = fn => frames.push(fn);
+  globalThis.cancelAnimationFrame = () => {};
+  const uploads = [];
+  const tiles = new SurfaceTiles(100.06, {
+    day: new Texture(),
+    anisotropy: 4, order: -70, reduceMotion: true, canUpload: () => true,
+    uploadTexture: texture => uploads.push(texture),
+  }, {});
+  const patch = phi => new Mesh(
+    new SphereGeometry(100.06, 6, 6, phi - 0.04, 0.08, Math.PI / 2 - 0.04, 0.08),
+    new MeshBasicMaterial({ map: new Texture() }),
+  );
+  try {
+    const front = patch(Math.PI / 2), back = patch(3 * Math.PI / 2), limb = patch(0.9 * Math.PI);
+    tiles.add(front, back, limb);
+    while (frames.length) frames.shift()(performance.now());
+    tiles.updateHorizonVisibility(new Vector3(0, 0, 340), 99.9);
+    assert.equal(front.visible, true);
+    assert.equal(back.visible, false);
+    assert.equal(limb.visible, true, 'tiles near the horizon keep coverage');
+    tiles.updateHorizonVisibility(new Vector3(0, 0, -340), 99.9);
+    assert.equal(front.visible, false);
+    assert.equal(back.visible, true);
+    assert.equal(tiles.loadedTileCount, 3);
+    assert.equal(uploads.length, 3, 'revealing an existing tile does not upload it again');
+  } finally {
+    tiles.dispose();
+    globalThis.requestAnimationFrame = previousRequest;
+    globalThis.cancelAnimationFrame = previousCancel;
+  }
+});
+
 test('tile engine uses the shared async loader, retries failures, and drops late results after disposal', async () => {
   const originalRequest = globalThis.requestAnimationFrame, originalCancel = globalThis.cancelAnimationFrame;
   const originalNow = Date.now;
@@ -147,7 +193,7 @@ test('tile engine uses the shared async loader, retries failures, and drops late
   Date.now = () => now;
   let fail = true, release;
   const tiles = new SurfaceTiles(100.06, {
-    day: new Texture(), night: new Texture(), sun: new Vector3(1, 0, 0),
+    day: new Texture(),
     anisotropy: 4, order: -70, reduceMotion: true, canUpload: () => true,
     loadImage: async () => {
       attempts++;

@@ -84,7 +84,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   <p class="note">
     <span class="mouse">拖动旋转 · Ctrl + 滚轮缩放</span>
     <span class="touch">左右滑动旋转 · 双指缩放 · 上下滑动翻页</span>
-    <span class="time" data-globe-time></span>
   </p>
 
   <div class="dock">
@@ -397,16 +396,16 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
 <script>
   import Globe from "globe.gl";
-  import { ImageLoader, TextureLoader, Vector3 } from "three";
+  import { ImageLoader, TextureLoader, TOUCH, Vector3 } from "three";
   import { SurfaceTiles } from "./SurfaceTiles";
   import { TileViewCache } from "./TileViewCache";
   import { TileImageCache, waitForPreloadIdle } from "./TileImageCache";
   import { TilePriority } from "./TilePriority";
   import { countryTilePlan, overviewTilePlan } from "./countryTilePlan";
   import { createSurfaceMaterial } from "./earthSurface";
+  import { useGlobeSpherePicking } from "./globePicking";
   import { HighlightLayer } from "./HighlightLayer";
   import { buildHighlightPolygons, clickableCountryCode, isProvinceHighlight } from "./globeHighlights";
-  import * as solar from "solar-calculator";
   import { feature } from "topojson-client";
   import { geoCentroid, geoBounds } from "d3-geo";
 
@@ -415,14 +414,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   let tileHost = "server.arcgisonline.com";
   const TILE_URL = (x: number, y: number, level: number) =>
     `https://${tileHost}/ArcGIS/rest/services/World_Imagery/MapServer/tile/${level}/${y}/${x}`;
-
-  // 太阳此刻直射点：[经度, 纬度]
-  const sunPosAt = (dt) => {
-    const day = new Date(+dt).setUTCHours(0, 0, 0, 0);
-    const t = solar.century(dt);
-    const longitude = ((day - dt) / 864e5) * 360 - 180;
-    return [longitude - solar.equationOfTime(t) / 4, solar.declination(t)];
-  };
 
   const root = document.querySelector("[data-globe-root]");
   const albumRoot = document.querySelector("[data-travel-albums]");
@@ -521,7 +512,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   async function init() {
     const el = root.querySelector("[data-globe-canvas]");
     const loadingEl = root.querySelector("[data-globe-loading]");
-    const timeEl = root.querySelector("[data-globe-time]");
     const card = root.querySelector("[data-card]");
     const cardTitle = root.querySelector("[data-card-title]");
     const cardMeta = root.querySelector("[data-card-meta]");
@@ -547,13 +537,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       coarse || navigator.connection?.saveData ? 4096 : 8192,
     );
     const loader = new TextureLoader();
-    async function loadEarthTexture(kind: string) {
+    async function loadDayTexture() {
       let texture;
       try {
-        texture = await loader.loadAsync(`/textures/earth-${kind}-8k.jpg`);
+        texture = await loader.loadAsync("/textures/earth-day-8k.jpg");
       } catch (err) {
-        console.warn(`[globe] ${kind} 8K 贴图加载失败，尝试标准贴图`, err);
-        texture = await loader.loadAsync(`/textures/earth-${kind}.jpg`);
+        console.warn("[globe] 8K 日间贴图加载失败，尝试标准贴图", err);
+        texture = await loader.loadAsync("/textures/earth-day.jpg");
       }
       const image = texture.image;
       const scale = Math.min(1, textureLimit / Math.max(image.width, image.height));
@@ -573,12 +563,11 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     let baseComplete = 0;
     const baseReady = <T,>(promise: Promise<T>) => promise.then(result => {
       baseComplete++;
-      loadStage(`Loading 8K maps and boundaries · ${baseComplete} / 4 ready`);
+      loadStage(`Loading the 8K map and boundaries · ${baseComplete} / 3 ready`);
       return result;
     });
-    const [dayTexture, nightTexture, topo, chinaProvinces] = await Promise.all([
-      loadEarthTexture("day"),
-      loadEarthTexture("night"),
+    const [dayTexture, topo, chinaProvinces] = await Promise.all([
+      loadDayTexture(),
       fetch("/data/countries-50m.json").then((r) => {
         if (!r.ok) throw new Error(`国家边界加载失败：HTTP ${r.status}`);
         return r.json();
@@ -592,8 +581,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       }),
     ].map(baseReady));
 
-    const sunDir = new Vector3(1, 0, 0);
-    const material = createSurfaceMaterial(dayTexture, nightTexture, sunDir);
+    const material = createSurfaceMaterial(dayTexture);
 
     // Country outlines plus selected Chinese provinces; China has no national outline.
     const countryByNumeric = new Map();
@@ -610,7 +598,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     let detailViewKey = "free";
     let tilesOn = false;
     const highlightPolygons = buildHighlightPolygons(visitedFeatures, countryByNumeric, chinaProvinces);
-    const highlights = new HighlightLayer(highlightPolygons, countryByNumeric, sunDir);
+    const highlights = new HighlightLayer(highlightPolygons, countryByNumeric);
     world.scene().add(highlights);
     let resumeTimer;
 
@@ -619,17 +607,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       .globeCurvatureResolution(1)
       .atmosphereColor("#6aa8ff")
       .atmosphereAltitude(0.18)
-      .polygonsData(highlightPolygons)
-      .polygonAltitude(0.004)
-      .polygonCapMaterial(f => highlights.fillMaterial(f))
-      .polygonStrokeColor(() => null)
-      .polygonSideColor(() => "rgba(0, 0, 0, 0)")
-      .polygonsTransitionDuration(0)
-      .polygonLabel(
+      .customLayerData(highlightPolygons)
+      .customThreeObject(f => highlights.pickerFor(f))
+      .customLayerLabel(
         (f) => isProvinceHighlight(f) ? f.properties.name
           : countryByNumeric.get(Number(f.id))?.name || f.properties.name,
       )
-      .onPolygonClick((f) => {
+      .onCustomLayerClick((f) => {
         const code = clickableCountryCode(f, countryByNumeric);
         if (code) showCountry(code);
       });
@@ -646,10 +630,16 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     if (coarse) renderer.domElement.style.touchAction = "pan-y";
 
     // Stable overview coverage stays under the detail engine throughout flights.
+    const regionalAltitude = 0.22;
+    const regionalZoomFactor = 0.78;
+    const minCountryAltitude = regionalAltitude / regionalZoomFactor;
+    let zoomFloor = regionalAltitude;
+    let zooming = false;
     let interacting = false;
+    let mouseCoasting = false;
     let detailAfter = 0;
     let settleTimer: ReturnType<typeof setTimeout>;
-    const cameraBusy = () => interacting || performance.now() < detailAfter;
+    const cameraBusy = () => interacting || zooming || mouseCoasting || performance.now() < detailAfter;
     const imageCache = new TileImageCache(coarse ? 48 * 1024 * 1024 : 96 * 1024 * 1024);
     const priorities = new TilePriority();
     const tileImageLoader = new ImageLoader();
@@ -661,18 +651,21 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         const localUrl = URL.createObjectURL(blob);
         try { return await tileImageLoader.loadAsync(localUrl); }
         finally { URL.revokeObjectURL(localUrl); }
-      }).then(image => {
-        controls.minDistance = coarse ? 108 : 103;
-        return image;
       });
     }
+    let recordTileWork: ((name: "瓦片视野更新" | "纹理上传", startTime: number) => void) | undefined;
     const surfaceOptions = {
-      day: dayTexture, night: nightTexture, sun: sunDir,
+      day: dayTexture,
       anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
       reduceMotion,
       canUpload: () => !cameraBusy(),
       loadImage: loadTileImage,
-      uploadBudget: 4,
+      uploadTexture: (texture: Texture) => {
+        const started = recordTileWork ? performance.now() : 0;
+        renderer.initTexture(texture);
+        recordTileWork?.("纹理上传", started);
+      },
+      uploadBudget: coarse ? 1 : 2,
     };
     const overviewLevel = coarse ? 3 : 4;
     const overview = new SurfaceTiles(100.05,
@@ -695,14 +688,24 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     }, coarse ? 3 : 6, coarse ? 512 : 2048);
     let satellite: SurfaceTiles | undefined;
     overview.visible = false;
-    world.scene().add(overview);
+    const globeScene = world.scene();
+    globeScene.add(overview);
+    // The inset sphere stays inside the faceted, opaque base globe.
+    const occluderRadius = world.getGlobeRadius() - 0.1;
+    const eyePosition = new Vector3();
+    globeScene.onBeforeRender = (_renderer, _scene, camera) => {
+      camera.getWorldPosition(eyePosition);
+      overview.updateHorizonVisibility(eyePosition, occluderRadius);
+      satellite?.updateHorizonVisibility(eyePosition, occluderRadius);
+    };
     let tileSourceReady = false;
     let entered = false;
     let introComplete = false;
     let introTimer: ReturnType<typeof setTimeout>;
     let priorityTiles = [];
     const backgroundAbort = new AbortController();
-    const pauseBackground = () => !introComplete || cameraBusy() || document.hidden;
+    const pauseBackground = () =>
+      !introComplete || cameraBusy() || performance.now() < detailAfter + 650 || document.hidden;
     imageCache.configure({ paused: pauseBackground, score: tile => priorities.rank(tile) }, coarse ? 4 : 6);
     let tileTimer: ReturnType<typeof setTimeout> | undefined;
     let lastTileUpdate = 0;
@@ -721,20 +724,25 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         tileTimer = undefined;
         lastTileUpdate = performance.now();
         if (!tileSourceReady || !entered || !introComplete) return;
+        const moving = cameraBusy();
+        root.dataset.tileMotion = moving ? "moving" : "settled";
+        if (moving) return;
+        const started = recordTileWork ? performance.now() : 0;
+        priorities.update(world.camera());
         overview.visible = true;
         if (!tilesOn) overview.tileUrl = TILE_URL;
         overview.updatePov(world.camera());
+        overview.resumeUploads();
         tilesOn = true;
         root.dataset.surface = "satellite";
         root.dataset.overviewTiles = String(overview.loadedTileCount);
         root.dataset.detailTiles = String(satellite?.loadedTileCount ?? 0);
-        root.dataset.tileMotion = cameraBusy() ? "moving" : "settled";
-        if (cameraBusy()) return;
         const needsDetail = altNow() < 1.35;
         if (needsDetail) {
           satellite = detailCache.activate(detailViewKey);
           if (!satellite.tileUrl) satellite.tileUrl = TILE_URL;
           satellite.updatePov(world.camera());
+          satellite.resumeUploads();
         } else {
           // Hiding the detail layer must not destroy a previously visited view.
           detailCache.hide();
@@ -746,20 +754,64 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         root.dataset.viewCacheHits = String(detailCache.hits);
         root.dataset.viewCacheMisses = String(detailCache.misses);
         root.dataset.viewCacheEvictions = String(detailCache.evictions);
+        recordTileWork?.("瓦片视野更新", started);
       }, Math.max(0, 150 - (performance.now() - lastTileUpdate)));
     }
 
     // 旋转：带惯性，自转缓慢
     const controls = world.controls();
+    const canvas = renderer.domElement;
+    let mousePointer: number | undefined;
+    let mouseDragging = false;
+    let mouseMovedAt = -Infinity;
+    const dragDecay = -60 * Math.log(0.65);
+    const coastDecay = 9.5;
+    // Reuse the installed OrbitControls angular queue for the release tail.
+    const pendingRotation = (controls as typeof controls & {
+      _sphericalDelta: { theta: number; phi: number };
+    })._sphericalDelta;
+    const syncPicking = () => world.enablePointerInteraction(!mouseDragging && !mouseCoasting && !zooming);
+    function stopMouseCoast() {
+      if (!mouseCoasting) return;
+      mouseCoasting = false;
+      pendingRotation.theta = pendingRotation.phi = 0;
+      syncPicking();
+    }
+
+    canvas.addEventListener("pointerdown", event => {
+      if (event.pointerType === "mouse" && event.button === 0) mousePointer = event.pointerId;
+    }, { capture: true });
+    canvas.addEventListener("pointermove", event => {
+      if (!interacting || event.pointerId !== mousePointer || !(event.buttons & 1)) return;
+      mouseMovedAt = performance.now();
+      if (!mouseDragging) {
+        mouseDragging = true;
+        syncPicking();
+      }
+    }, { capture: true });
+    const releaseMouse = (event: PointerEvent) => {
+      if (event.pointerId !== mousePointer) return;
+      mousePointer = undefined;
+      if (event.type === "pointercancel") mouseMovedAt = -Infinity;
+    };
+    canvas.addEventListener("pointerup", releaseMouse);
+    canvas.addEventListener("pointercancel", releaseMouse, { capture: true });
+
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
     controls.autoRotate = false;
     controls.enabled = false;
     controls.autoRotateSpeed = 0.35;
-    controls.minDistance = textureLimit >= 8192 ? 108 : 125;
+    // Wheel and pinch share the same camera easing and zoom limit below.
+    controls.enableZoom = false;
+    controls.touches.TWO = TOUCH.DOLLY_ROTATE;
+    controls.minDistance = 100 * (1 + regionalAltitude);
     controls.maxDistance = 520; // Allow the original distant opening pose.
     controls.addEventListener("start", () => {
       finishIntro();
+      interruptFlight();
+      stopZoom();
+      stopMouseCoast();
       interacting = true;
       deferDetails(200);
       clearTimeout(resumeTimer);
@@ -767,66 +819,192 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     });
     controls.addEventListener("end", () => {
       interacting = false;
+      if (mouseDragging) {
+        mouseDragging = false;
+        const pendingAngle = Math.hypot(pendingRotation.theta, pendingRotation.phi);
+        if (!reduceMotion && performance.now() - mouseMovedAt < 85 && pendingAngle > 0.001) {
+          // Slower decay at the same initial angular speed, with a shorter
+          // maximum glide when the camera is close to the surface.
+          const maxAngle = Math.min(0.40, 0.24 * (altNow() + 0.35));
+          const scale = Math.min(dragDecay / coastDecay, maxAngle / pendingAngle);
+          pendingRotation.theta *= scale;
+          pendingRotation.phi *= scale;
+          mouseCoasting = true;
+        } else {
+          pendingRotation.theta = pendingRotation.phi = 0;
+        }
+        syncPicking();
+      }
       deferDetails(250);
       clearTimeout(resumeTimer);
       if (!reduceMotion && !selectedCode)
         resumeTimer = setTimeout(() => (controls.autoRotate = true), 4000);
     });
 
-    // 丝滑缩放：接管 Ctrl + 滚轮，按高度比例缩放，每帧逼近目标
+    // Ease multiplicative zoom in log space so large and small scales feel alike.
     const altNow = () => world.camera().position.length() / 100 - 1;
-    const minAlt = () => controls.minDistance / 100 - 1;
-    const maxAlt = () => controls.maxDistance / 100 - 1;
     controls.addEventListener("change", () => {
-      priorities.update(world.camera(), sunDir);
-      highlights.setZoom(altNow());
-      if (interacting) deferDetails(250);
-      updateTiles();
+      const altitude = altNow();
+      highlights.setZoom(altitude);
+      if (!cameraBusy()) updateTiles();
       controls.autoRotateSpeed =
-        0.35 * Math.min(1, Math.max(0.12, altNow() / 2.4));
+        0.35 * Math.min(1, Math.max(0.12, altitude / 2.4));
     });
 
-    let targetAlt = altNow();
-    let rafId = 0;
-    let lastT = 0;
-    const tick = (now) => {
-      const dt = Math.min(48, now - (lastT || now));
-      lastT = now;
-      const k = 1 - Math.pow(0.84, dt / 16.67);
-      const cur = altNow();
-      const next = cur + (targetAlt - cur) * k;
-      const done = Math.abs(targetAlt - next) < 0.0006;
-      world.camera().position.setLength(100 * (1 + (done ? targetAlt : next)));
-      if (done) {
-        rafId = 0;
-        lastT = 0;
-        deferDetails(200);
+    let targetLogAltitude = 0;
+    let lastZoomTime = 0;
+    let flightUntil = 0;
+    const wheelResponse = 15.5;
+    const maxWheelLead = 0.65;
+    let zoomInput: "wheel" | "pinch" = "wheel";
+    let wheelVelocity = 0;
+    let wheelTail = 0;
+    let lastWheelAt = -Infinity;
+    function stopZoom() {
+      if (!zooming) return;
+      zooming = false;
+      wheelVelocity = 0;
+      wheelTail = 0;
+      syncPicking();
+    }
+    function interruptFlight() {
+      if (performance.now() >= flightUntil) return;
+      flightUntil = 0;
+      world.pointOfView(world.pointOfView(), 0);
+      deferDetails(100);
+    }
+    function tickZoom(now: number) {
+      const elapsed = Math.max(1, Math.min(50, now - lastZoomTime)) / 1000;
+      lastZoomTime = now;
+      const current = Math.log(altNow());
+      const offset = current - targetLogAltitude;
+      let next: number;
+      if (zoomInput === "wheel") {
+        // Keep velocity between wheel events so a burst reads as one movement.
+        const decay = Math.exp(-wheelResponse * elapsed);
+        const drift = wheelVelocity + wheelResponse * offset;
+        next = targetLogAltitude + (offset + drift * elapsed) * decay;
+        wheelVelocity = (wheelVelocity - wheelResponse * drift * elapsed) * decay;
       } else {
-        deferDetails(200);
-        rafId = requestAnimationFrame(tick);
+        next = targetLogAltitude + offset * Math.exp(-elapsed / 0.053);
+      }
+      const done = Math.abs(next - targetLogAltitude) < 0.002;
+      world.camera().position.setLength(100 * (1 + Math.exp(done ? targetLogAltitude : next)));
+      if (done) {
+        stopZoom();
+        deferDetails(100);
+        if (!interacting && !selectedCode) {
+          clearTimeout(resumeTimer);
+          resumeTimer = setTimeout(() => (controls.autoRotate = true), 4000);
+        }
+      }
+    }
+    // Let OrbitControls collect pointer deltas, but apply mouse rotation and
+    // zoom once, immediately before Globe.gl draws the frame.
+    const updateOrbit = controls.update.bind(controls);
+    controls.update = (deltaTime?: number) => {
+      if (deltaTime === undefined) return mouseDragging || mouseCoasting ? false : updateOrbit();
+      const now = performance.now();
+      if (zooming) tickZoom(now);
+      if (!mouseDragging && !mouseCoasting) return updateOrbit(deltaTime);
+
+      // Use the same decay per second at every refresh rate.
+      const damping = controls.dampingFactor;
+      const decay = mouseCoasting ? coastDecay : dragDecay;
+      controls.dampingFactor = reduceMotion ? 1 : 1 - Math.exp(-decay * Math.min(deltaTime, 0.05));
+      try {
+        return updateOrbit(deltaTime);
+      } finally {
+        controls.dampingFactor = damping;
+        if (mouseCoasting && Math.hypot(pendingRotation.theta, pendingRotation.phi) < 0.001) {
+          stopMouseCoast();
+          deferDetails(100);
+        }
       }
     };
+    function zoomBy(logDelta: number, input: "wheel" | "pinch") {
+      if (!entered || logDelta === 0) return;
+      finishIntro();
+      interruptFlight();
+      const current = Math.log(altNow());
+      const continuing = zooming && input === zoomInput && logDelta * (targetLogAltitude - current) > 0;
+      const previousTarget = continuing ? targetLogAltitude - wheelTail : current;
+      const floor = Math.log(zoomFloor);
+      const ceiling = Math.log(controls.maxDistance / 100 - 1);
+      const wheel = input === "wheel";
+      const clampTarget = (value: number) => {
+        const paced = wheel
+          ? current + Math.max(-maxWheelLead, Math.min(maxWheelLead, value - current))
+          : value;
+        return Math.min(ceiling, Math.max(floor, paced));
+      };
+      const baseTarget = clampTarget(previousTarget + logDelta);
+      const now = performance.now();
+      const wheelBurst = continuing && now - lastWheelAt < 120;
+      const tail = wheel && !reduceMotion
+        ? Math.sign(logDelta) * Math.min(0.18, Math.abs(logDelta) * (wheelBurst ? 0.66 : 0.34))
+        : 0;
+      const nextTarget = baseTarget + tail;
+      // Same-direction ticks can extend the glide, never pull the target back.
+      const keepLead = continuing && wheel && (targetLogAltitude - nextTarget) * logDelta > 0;
+      const target = clampTarget(keepLead ? targetLogAltitude : nextTarget);
+      if (wheel) lastWheelAt = now;
+      wheelTail = target - baseTarget;
+      if (Math.abs(target - (zooming ? targetLogAltitude : current)) < 1e-8) return;
+      stopMouseCoast();
+      const remaining = target - current;
+      // A reversal responds immediately, and the final step cannot overshoot a zoom limit.
+      if (input !== zoomInput || wheelVelocity * remaining <= 0) wheelVelocity = 0;
+      else wheelVelocity = Math.sign(remaining) * Math.min(Math.abs(wheelVelocity), wheelResponse * Math.abs(remaining));
+      zoomInput = input;
+      targetLogAltitude = target;
+      stopRotation();
+      if (!zooming) {
+        lastZoomTime = now;
+        if (reduceMotion) {
+          world.camera().position.setLength(100 * (1 + Math.exp(targetLogAltitude)));
+          deferDetails(100);
+        } else {
+          zooming = true;
+          syncPicking();
+          root.dataset.tileMotion = "moving";
+        }
+      }
+    }
     el.addEventListener(
       "wheel",
       (e) => {
         e.stopPropagation();
         if (!(e.ctrlKey || e.metaKey)) return;
-        finishIntro();
-        deferDetails(350);
         e.preventDefault();
-        if (!rafId) targetAlt = altNow();
         let d = e.deltaY;
         if (e.deltaMode === 1) d *= 33;
         else if (e.deltaMode === 2) d *= 120;
         d = Math.max(-120, Math.min(120, d));
-        targetAlt = Math.min(
-          maxAlt(),
-          Math.max(minAlt(), targetAlt * Math.exp(d * 0.0022)),
-        );
-        if (!rafId) rafId = requestAnimationFrame(tick);
+        zoomBy(d * 0.0027, "wheel");
       },
       { capture: true, passive: false },
     );
+
+    let pinchDistance = 0;
+    const fingerDistance = (event: TouchEvent) =>
+      Math.hypot(event.touches[0].clientX - event.touches[1].clientX,
+        event.touches[0].clientY - event.touches[1].clientY);
+    canvas.addEventListener("touchstart", event => {
+      pinchDistance = event.touches.length === 2 ? fingerDistance(event) : 0;
+      if (pinchDistance && event.cancelable) event.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener("touchmove", event => {
+      if (event.touches.length !== 2 || !pinchDistance) return;
+      const distance = fingerDistance(event);
+      if (distance < 1) return;
+      if (event.cancelable) event.preventDefault();
+      zoomBy(Math.log(pinchDistance / distance), "pinch");
+      pinchDistance = distance;
+    }, { passive: false });
+    const endPinch = () => { pinchDistance = 0; };
+    canvas.addEventListener("touchend", endPinch, { passive: true });
+    canvas.addEventListener("touchcancel", endPinch, { passive: true });
 
     let flightSampleFrame = 0;
     function sampleFlight(ms: number) {
@@ -850,9 +1028,12 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     }
     function flyTo(pov: { lat?: number; lng?: number; altitude?: number }, ms = FLY_MS) {
       if (entered) finishIntro();
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-      lastT = 0;
+      stopZoom();
+      stopMouseCoast();
+      zoomFloor = selectedCode && pov.altitude !== undefined
+        ? Math.max(regionalAltitude, pov.altitude * regionalZoomFactor)
+        : regionalAltitude;
+      flightUntil = performance.now() + ms;
       deferDetails(ms + 180);
       sampleFlight(ms);
       world.pointOfView(pov, ms);
@@ -861,7 +1042,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
     // ---- 国家 / 城市的飞行与界面 ----
     function viewFor(c) {
-      if (c.view) return c.view;
+      if (c.view) return { ...c.view, altitude: Math.max(minCountryAltitude, c.view.altitude) };
       const f = visitedFeatures.find((x) => Number(x.id) === c.numeric);
       if (!f) {
         const lat = c.cities.reduce((s, x) => s + x.lat, 0) / c.cities.length;
@@ -874,7 +1055,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       if (dLng < 0) dLng += 360; // 跨越 180° 经线（如斐济）
       dLng = Math.min(dLng, 90);
       const size = Math.max(dLng * Math.cos((lat * Math.PI) / 180), n - s);
-      return { lat, lng, altitude: Math.min(1.8, Math.max(0.22, size / 38)) };
+      return { lat, lng, altitude: Math.min(1.8, Math.max(minCountryAltitude, size / 38)) };
     }
 
     function stopRotation() {
@@ -962,7 +1143,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     function showOverview() {
       selectedCode = null;
       priorityTiles = [];
-      priorities.update(world.camera(), sunDir, [], true);
+      priorities.update(world.camera(), [], true);
       hideCityUi();
       syncChips();
       applyPolygonStyle();
@@ -978,7 +1159,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     function prepareCountry(country) {
       const pov = viewFor(country);
       priorityTiles = countryTilePlan(pov, world.camera(), coarse);
-      priorities.update(world.camera(), sunDir, priorityTiles, true);
+      priorities.update(world.camera(), priorityTiles, true);
       priorityTiles.sort((a, b) => priorities.rank(b) - priorities.rank(a));
       root.dataset.preloadPriority = country.code;
       if (!tileSourceReady || pov.altitude >= 1.35) return;
@@ -1035,20 +1216,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     root.dataset.surface = "local";
     root.dataset.introState = "waiting";
 
-    // 实时太阳位置，每 30 秒更新一次
-    const updateSun = () => {
-      const now = Date.now();
-      const [sLng, sLat] = sunPosAt(now);
-      const c = world.getCoords(sLat, sLng, 0);
-      sunDir.set(c.x, c.y, c.z).normalize();
-      priorities.update(world.camera(), sunDir, undefined, true);
-      timeEl.textContent =
-        "实时昼夜 · " +
-        new Date(now).toLocaleString("zh-CN", { hour12: false });
-    };
-    updateSun();
-    setInterval(updateSun, 30000);
-
     new ResizeObserver(() =>
       world.width(el.clientWidth).height(el.clientHeight),
     ).observe(el);
@@ -1070,6 +1237,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     }
     function enterHome() {
       if (entered) return;
+      useGlobeSpherePicking(globeScene, material, world.getGlobeRadius());
       entered = true;
       tileSourceReady = true;
       controls.enabled = true;
@@ -1077,6 +1245,14 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       loadingEl?.remove();
       revealHome();
       root.dataset.homeReady = "true";
+      if (import.meta.env.DEV && new URLSearchParams(location.search).has("globe-perf")) {
+        void import("./globePerformance").then(({ installGlobePerformance }) => {
+          recordTileWork = installGlobePerformance(renderer,
+            () => mouseDragging ? "拖动"
+              : zooming && zoomInput === "wheel" && performance.now() - lastWheelAt < 85 ? "滚轮" : null,
+            () => [overview, satellite]);
+        });
+      }
       // Two frames ensure the cover is gone before the camera starts moving.
       requestAnimationFrame(() => requestAnimationFrame(() => {
         if (introComplete) return; // A user action already took over the camera.
@@ -1124,9 +1300,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       loadStage("Preparing the 8K day map for display…");
       await paintLoading();
       renderer.initTexture(dayTexture);
-      loadStage("Preparing the 8K night map for display…");
-      await paintLoading();
-      renderer.initTexture(nightTexture);
       loadStage("Finishing the globe lighting…");
       await paintLoading();
       let shaderDeadline: ReturnType<typeof setTimeout>;

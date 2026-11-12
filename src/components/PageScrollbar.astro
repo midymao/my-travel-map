@@ -1,0 +1,223 @@
+<div
+  class="page-scrollbar"
+  role="scrollbar"
+  aria-label="页面滚动"
+  aria-controls="page-scroll-content"
+  aria-orientation="vertical"
+  aria-valuemin="0"
+  aria-valuemax="100"
+  aria-valuenow="0"
+  tabindex="0"
+  hidden
+>
+  <span class="page-scrollbar-thumb"></span>
+</div>
+
+<style>
+  @media (hover: hover) and (pointer: fine) and (forced-colors: none) and (prefers-reduced-motion: no-preference) {
+    :global(html[data-page-scrollbar]) {
+      --page-scrollbar-width: 12px;
+      margin-right: var(--page-scrollbar-width);
+      scrollbar-width: none;
+    }
+
+    :global(html[data-page-scrollbar]::-webkit-scrollbar) { display: none; }
+    :global(html[data-page-scrollbar] .site-header) { right: var(--page-scrollbar-width); }
+
+    .page-scrollbar:not([hidden]) {
+      display: block;
+      position: fixed;
+      inset: 0 0 0 auto;
+      width: var(--page-scrollbar-width);
+      z-index: 110;
+      background: var(--scrollbar-track);
+      touch-action: none;
+      user-select: none;
+    }
+
+    .page-scrollbar-thumb {
+      position: absolute;
+      inset: 0 0 auto;
+      height: var(--thumb-height);
+      transform: translateY(var(--thumb-offset));
+    }
+
+    .page-scrollbar-thumb::after {
+      content: "";
+      position: absolute;
+      inset: 2px 3px;
+      border-radius: 999px;
+      background: var(--scrollbar-thumb);
+      transition: background-color 180ms ease-out;
+    }
+
+    .page-scrollbar-thumb:hover::after,
+    .page-scrollbar:focus-visible .page-scrollbar-thumb::after { background: #85858b; }
+    .page-scrollbar[data-dragging] .page-scrollbar-thumb::after {
+      background: #a5a5ab;
+      transition-duration: 90ms;
+    }
+    .page-scrollbar:focus-visible { outline: 1px solid #a5a5ab; outline-offset: -1px; }
+  }
+</style>
+
+<script>
+  const bar = document.querySelector<HTMLElement>(".page-scrollbar");
+  const thumb = bar?.querySelector<HTMLElement>(".page-scrollbar-thumb");
+  if (bar && thumb) {
+    const root = document.documentElement;
+    const desktopMotion = matchMedia(
+      "(hover: hover) and (pointer: fine) and (forced-colors: none) and (prefers-reduced-motion: no-preference)",
+    );
+    const clamp = (value: number, max: number) => Math.min(max, Math.max(0, value));
+    const scrollTo = (top: number) => window.scrollTo({ top, behavior: "instant" });
+    let viewport = 0;
+    let maxScroll = 0;
+    let thumbTravel = 0;
+    let thumbOffset = 0;
+    let paintFrame = 0;
+    let wheelFrame = 0;
+    let wheelTarget = 0;
+    let wheelPosition = 0;
+    let previousFrame = 0;
+    let lastWheelY = 0;
+    let drag: { pointerId: number; offset: number } | undefined;
+
+    const paint = () => {
+      paintFrame = 0;
+      if (bar.hidden) return;
+      const progress = clamp(window.scrollY, maxScroll) / maxScroll;
+      thumbOffset = progress * thumbTravel;
+      thumb.style.setProperty("--thumb-offset", `${thumbOffset}px`);
+      bar.setAttribute("aria-valuenow", String(Math.round(progress * 100)));
+    };
+
+    const schedulePaint = () => {
+      if (!paintFrame) paintFrame = requestAnimationFrame(paint);
+    };
+
+    const stopWheel = () => {
+      if (wheelFrame) cancelAnimationFrame(wheelFrame);
+      wheelFrame = 0;
+    };
+
+    const measure = () => {
+      viewport = root.clientHeight;
+      const contentHeight = root.scrollHeight;
+      maxScroll = Math.max(0, contentHeight - viewport);
+      bar.hidden = !desktopMotion.matches || maxScroll === 0 ||
+        /^(hidden|clip)$/.test(getComputedStyle(root).overflowY);
+      if (bar.hidden) {
+        stopWheel();
+        return;
+      }
+      const height = Math.min(viewport, Math.max(28, viewport * viewport / contentHeight));
+      thumbTravel = viewport - height;
+      thumb.style.setProperty("--thumb-height", `${height}px`);
+      schedulePaint();
+    };
+
+    const tickWheel = (now: number) => {
+      if (Math.abs(window.scrollY - lastWheelY) > 1 || bar.hidden) {
+        stopWheel();
+        return;
+      }
+      wheelTarget = clamp(wheelTarget, maxScroll);
+      const remaining = wheelTarget - wheelPosition;
+      const elapsed = Math.max(1, now - previousFrame);
+      previousFrame = now;
+      const finished = Math.abs(remaining) <= 1;
+      wheelPosition = finished ? wheelTarget : wheelPosition + remaining * (1 - Math.exp(-elapsed / 46));
+      scrollTo(wheelPosition);
+      lastWheelY = window.scrollY;
+      wheelFrame = finished ? 0 : requestAnimationFrame(tickWheel);
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      const { deltaMode, deltaX, deltaY } = event;
+      const step = Math.abs(deltaY);
+      // Line deltas and common full mouse notches get easing. Continuous gestures stay native.
+      const isMouseStep = deltaMode === WheelEvent.DOM_DELTA_LINE ||
+        (deltaMode === WheelEvent.DOM_DELTA_PIXEL && step >= 80 && (step % 40 === 0 || step % 100 === 0));
+      if (bar.hidden || !event.cancelable || event.defaultPrevented || !isMouseStep ||
+        !deltaY || deltaX || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+        stopWheel();
+        return;
+      }
+      for (const node of event.composedPath()) {
+        if (node === root || node === document.body) break;
+        if (!(node instanceof HTMLElement)) continue;
+        if (node.matches("input, textarea, select, [contenteditable]") ||
+          (node.scrollHeight > node.clientHeight && /^(auto|scroll)$/.test(getComputedStyle(node).overflowY))) {
+          stopWheel();
+          return;
+        }
+      }
+      const current = window.scrollY;
+      const delta = deltaMode === WheelEvent.DOM_DELTA_LINE ? deltaY * 40 : deltaY;
+      const continuing = wheelFrame && Math.sign(wheelTarget - current) === Math.sign(delta);
+      const next = clamp((continuing ? wheelTarget : current) + delta, maxScroll);
+      if (next === current && !wheelFrame) return;
+      event.preventDefault();
+      wheelTarget = next;
+      if (!wheelFrame) {
+        wheelPosition = lastWheelY = current;
+        previousFrame = performance.now();
+        wheelFrame = requestAnimationFrame(tickWheel);
+      }
+    };
+
+    bar.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || drag) return;
+      event.preventDefault();
+      bar.focus({ preventScroll: true });
+      if (!thumb.contains(event.target as Node)) {
+        scrollTo(clamp(window.scrollY + (event.clientY < thumbOffset ? -viewport : viewport), maxScroll));
+        return;
+      }
+      drag = { pointerId: event.pointerId, offset: event.clientY - thumbOffset };
+      bar.setPointerCapture(event.pointerId);
+      bar.dataset.dragging = "";
+    });
+
+    bar.addEventListener("pointermove", (event) => {
+      if (drag?.pointerId !== event.pointerId || !thumbTravel) return;
+      scrollTo(clamp(event.clientY - drag.offset, thumbTravel) / thumbTravel * maxScroll);
+    });
+
+    bar.addEventListener("lostpointercapture", () => {
+      drag = undefined;
+      delete bar.dataset.dragging;
+    });
+
+    bar.addEventListener("keydown", (event) => {
+      const y = window.scrollY;
+      const positions: Record<string, number> = {
+        ArrowUp: y - 40, ArrowDown: y + 40,
+        PageUp: y - viewport, PageDown: y + viewport, Home: 0, End: maxScroll,
+      };
+      const top = positions[event.key];
+      if (typeof top !== "number") return;
+      event.preventDefault();
+      scrollTo(clamp(top, maxScroll));
+    });
+
+    const configure = () => {
+      root.toggleAttribute("data-page-scrollbar", desktopMotion.matches);
+      if (desktopMotion.matches) window.addEventListener("wheel", onWheel, { passive: false });
+      else window.removeEventListener("wheel", onWheel);
+      measure();
+    };
+
+    new ResizeObserver(measure).observe(document.body);
+    new MutationObserver(measure).observe(root, {
+      attributes: true, attributeFilter: ["style", "data-home-loading-active"],
+    });
+    window.addEventListener("resize", measure, { passive: true });
+    window.addEventListener("scroll", schedulePaint, { passive: true });
+    window.addEventListener("pointerdown", stopWheel, { capture: true, passive: true });
+    window.addEventListener("keydown", stopWheel, { capture: true });
+    desktopMotion.addEventListener("change", configure);
+    configure();
+  }
+</script>

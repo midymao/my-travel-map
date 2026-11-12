@@ -35,6 +35,9 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
 
 <script>
   import { PhotoDeckState, type DeckSlide } from './photoDeckState';
+  const openCloseDuration = 520;
+  const coverSwapDuration = 460;
+  const openClickGuard = openCloseDuration + 20;
   document.querySelectorAll<HTMLElement>('[data-country-photo-deck]').forEach(root => {
     const slides: DeckSlide[] = JSON.parse(root.dataset.slides!);
     const state = new PhotoDeckState(slides);
@@ -48,7 +51,6 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
     let lockedPointer: { x: number; y: number } | undefined;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const motion = new Map<HTMLAnchorElement, Animation>();
-    const duration = 860;
     const stopMotion = () => {
       motion.forEach((animation, card) => {
         animation.cancel(); card.style.removeProperty('will-change');
@@ -93,7 +95,7 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
       update(); render(true);
       // Layout is resolved once. During playback only transform changes, never geometry.
       const after = measure();
-      const timing = incoming < 0 ? 680 : duration;
+      const timing = incoming < 0 ? openCloseDuration : coverSwapDuration;
       settleUntil = performance.now() + (reducedMotion.matches ? 0 : timing);
       if (!reducedMotion.matches) cards.forEach((card, index) => {
         const from = before[index], to = after[index];
@@ -152,7 +154,7 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
           document.dispatchEvent(new CustomEvent('country-photo-deck-open', { detail: root.dataset.countryPhotoDeck }));
         } else if (state.selectedIndex !== index) {
           event.preventDefault(); select(index);
-        } else if (performance.now() - openedAt < 700 || performance.now() < settleUntil) event.preventDefault();
+        } else if (performance.now() - openedAt < openClickGuard || performance.now() < settleUntil) event.preventDefault();
       });
       card.addEventListener('focus', () => { if (state.isOpen) select(index); });
     });

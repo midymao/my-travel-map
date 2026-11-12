@@ -484,8 +484,13 @@ var ThreeSlippyMapGlobe = /*#__PURE__*/function (_Group) {
         var idx = this.thresholds.findIndex(function (t) {
           return t && t <= cameraDistance;
         });
-        this.level = Math.min(this.maxLevel, Math.max(this.minLevel, idx < 0 ? this.thresholds.length : idx));
-        _assertClassBrand(_ThreeSlippyMapGlobe_brand, this, _fetchNeededTiles).call(this);
+        var nextLevel = Math.min(this.maxLevel, Math.max(this.minLevel, idx < 0 ? this.thresholds.length : idx));
+        if (nextLevel !== this.level) {
+          // The level setter already fetches tiles for the new level.
+          this.level = nextLevel;
+        } else {
+          _assertClassBrand(_ThreeSlippyMapGlobe_brand, this, _fetchNeededTiles).call(this);
+        }
       }
     }
   }]);
@@ -599,16 +604,16 @@ function _fetchNeededTiles() {
       var height = latLen * (1 - _this5.tileMargin);
       var rotLng = deg2Rad(lng);
       var rotLat = deg2Rad(-lat);
-      var tile = new Mesh(new SphereGeometry(_classPrivateFieldGet2(_radius, _this5), Math.ceil(width / _this5.curvatureResolution), Math.ceil(height / _this5.curvatureResolution), deg2Rad(90 - width / 2) + rotLng, deg2Rad(width), deg2Rad(90 - height / 2) + rotLat, deg2Rad(height)), new MeshLambertMaterial());
-      if (_classPrivateFieldGet2(_isMercator, _this5)) {
-        var _map = [lat + latLen / 2, lat - latLen / 2].map(function (lat) {
-            return 0.5 - lat / 180;
-          }),
-          _map2 = _slicedToArray(_map, 2),
-          _y = _map2[0],
-          _y2 = _map2[1];
-        convertMercatorUV(tile.geometry.attributes.uv, _y, _y2);
-      }
+      var tile = new Mesh(undefined, new MeshLambertMaterial());
+      // Reserve a tile immediately to deduplicate requests. SurfaceTiles
+      // builds the real mesh only when its image can be uploaded.
+      tile.userData.buildTileGeometry = function () {
+        var geometry = new SphereGeometry(_classPrivateFieldGet2(_radius, _this5), Math.ceil(width / _this5.curvatureResolution), Math.ceil(height / _this5.curvatureResolution), deg2Rad(90 - width / 2) + rotLng, deg2Rad(width), deg2Rad(90 - height / 2) + rotLat, deg2Rad(height));
+        if (_classPrivateFieldGet2(_isMercator, _this5)) {
+          convertMercatorUV(geometry.attributes.uv, 0.5 - (lat + latLen / 2) / 180, 0.5 - (lat - latLen / 2) / 180);
+        }
+        return geometry;
+      };
       d.obj = tile;
     }
     if (!d.loading) {

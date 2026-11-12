@@ -1,4 +1,7 @@
-import { Color, Group, InstancedBufferAttribute, ShaderMaterial, Vector3 } from 'three';
+import { Color, Float32BufferAttribute, Group, InstancedBufferAttribute, Mesh, MeshBasicMaterial, ShaderMaterial, Vector3 } from 'three';
+import type { BufferGeometry } from 'three';
+import ConicPolygonGeometry from 'three-conic-polygon-geometry';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
@@ -8,24 +11,22 @@ import type { HighlightFeature } from './globeHighlights';
 type CountryMap = Map<number, { code: string }>;
 
 const fillVertex = `
-  varying vec3 highlightSurface;
+  attribute float highlightRegion;
+  varying float fillRegion;
   void main() {
-    vec4 world = modelMatrix * vec4(position, 1.0);
-    highlightSurface = normalize(world.xyz);
-    gl_Position = projectionMatrix * viewMatrix * world;
+    fillRegion = highlightRegion;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 const fillFragment = `
-  uniform vec3 sunDir;
   uniform vec3 tint;
-  uniform float selected;
+  uniform float selectedRegion;
   uniform float focused;
   uniform float detail;
-  varying vec3 highlightSurface;
+  varying float fillRegion;
   void main() {
-    float daylight = smoothstep(-0.10, 0.14, dot(normalize(highlightSurface), sunDir));
-    float alpha = mix(0.105, 0.175, daylight);
-    alpha = mix(alpha, mix(0.15, 0.24, daylight), selected);
+    float selected = 1.0 - step(0.5, abs(fillRegion - selectedRegion));
+    float alpha = mix(0.175, 0.24, selected);
     alpha *= mix(1.0, 0.76, detail);
     alpha *= mix(1.0, 0.62, focused * (1.0 - selected));
     gl_FragColor = vec4(tint, alpha);
@@ -44,17 +45,16 @@ export class HighlightLayer extends Group {
   readonly uniqueSegmentCount: number;
   private readonly owners: Set<string>[] = [];
   private readonly selectedAttribute: InstancedBufferAttribute;
-  private readonly fills = new Map<HighlightFeature, ShaderMaterial>();
+  private readonly pickers = new Map<HighlightFeature, Mesh>();
+  private readonly pickMaterial = new MeshBasicMaterial({ visible: false });
+  private readonly regionIds = new Map<string, number>();
+  private readonly selectedRegion = { value: 0 };
+  private fill?: Mesh<BufferGeometry, ShaderMaterial>;
   private readonly focused = { value: 0 };
   private readonly detail = { value: 0 };
-  private selectedCode: string | null = null;
-  private countries: CountryMap;
-  private sun: Vector3;
-
-  constructor(features: HighlightFeature[], countries: CountryMap, sun: Vector3) {
+  constructor(features: HighlightFeature[], countries: CountryMap) {
     super();
-    this.countries = countries;
-    this.sun = sun;
+    this.buildFills(features, countries);
     const segments = uniqueBoundarySegments(features, countries);
     this.uniqueSegmentCount = segments.length;
     const positions: number[] = [];
@@ -88,19 +88,14 @@ export class HighlightLayer extends Group {
         color: pass.color, linewidth: pass.width, opacity: pass.opacity,
         transparent: true, depthWrite: false, depthTest: true, toneMapped: false,
       });
-      material.uniforms.sunDir = { value: sun };
       material.uniforms.focused = this.focused;
       material.uniforms.selectedTint = { value: new Color('#c2dce6') };
-      material.vertexShader = `attribute float instanceSelected; varying float boundarySelected; varying vec3 boundarySurface;\n${material.vertexShader}`
+      material.vertexShader = `attribute float instanceSelected; varying float boundarySelected;\n${material.vertexShader}`
         .replace('void main() {', `void main() {
-          boundarySelected = instanceSelected;
-          vec3 boundaryPoint = position.y < 0.5 ? instanceStart : instanceEnd;
-          boundarySurface = normalize((modelMatrix * vec4(boundaryPoint, 1.0)).xyz);`);
-      material.fragmentShader = `uniform vec3 sunDir; uniform float focused; uniform vec3 selectedTint;
-        varying float boundarySelected; varying vec3 boundarySurface;\n${material.fragmentShader}`
+          boundarySelected = instanceSelected;`);
+      material.fragmentShader = `uniform float focused; uniform vec3 selectedTint;
+        varying float boundarySelected;\n${material.fragmentShader}`
         .replace('gl_FragColor = vec4( diffuseColor.rgb, alpha );', `
-          float daylight = smoothstep(-0.10, 0.14, dot(normalize(boundarySurface), sunDir));
-          alpha *= mix(0.68, 1.0, daylight);
           alpha *= mix(1.0, 0.72, focused * (1.0 - boundarySelected));
           ${pass.glow ? 'alpha *= exp(-3.5 * vUv.x * vUv.x);' : 'alpha *= 1.0 - smoothstep(0.55, 1.0, abs(vUv.x));'}
           vec3 ink = mix(diffuseColor.rgb, selectedTint, boundarySelected * ${pass.glow ? '0.15' : '0.65'});
@@ -114,29 +109,57 @@ export class HighlightLayer extends Group {
     });
   }
 
-  fillMaterial(feature: HighlightFeature) {
-    let material = this.fills.get(feature);
-    if (!material) {
-      material = new ShaderMaterial({
-        uniforms: {
-          sunDir: { value: this.sun }, tint: { value: new Color('#55aee0') },
-          focused: this.focused, detail: this.detail,
-          selected: { value: highlightCountryCode(feature, this.countries) === this.selectedCode ? 1 : 0 },
-        },
-        vertexShader: fillVertex, fragmentShader: fillFragment,
-        transparent: true, depthWrite: false, depthTest: true, toneMapped: false,
+  private buildFills(features: HighlightFeature[], countries: CountryMap) {
+    const featureGeometries: BufferGeometry[] = [];
+    for (const feature of features) {
+      const shape = feature.geometry;
+      if (!shape?.coordinates) continue;
+      const coordinates = shape.coordinates;
+      const polygons = shape.type === 'Polygon'
+        ? [coordinates as number[][][]] : coordinates as number[][][][];
+      const parts = polygons.map(rings => {
+        const geometry = new ConicPolygonGeometry(rings, 0, 100.4, false, true, false, 5);
+        geometry.deleteAttribute('normal');
+        geometry.deleteAttribute('uv');
+        return geometry;
       });
-      this.fills.set(feature, material);
+      if (!parts.length) continue;
+      const geometry = mergeGeometries(parts);
+      parts.forEach(part => part.dispose());
+      if (!geometry) continue;
+      const code = highlightCountryCode(feature, countries);
+      if (code && !this.regionIds.has(code)) this.regionIds.set(code, this.regionIds.size + 1);
+      const region = code ? this.regionIds.get(code)! : -1;
+      geometry.setAttribute('highlightRegion',
+        new Float32BufferAttribute(new Float32Array(geometry.getAttribute('position').count).fill(region), 1));
+      featureGeometries.push(geometry);
+      // The mesh remains available to Raycaster, while its invisible material
+      // keeps it out of the render list entirely.
+      this.pickers.set(feature, new Mesh(geometry, this.pickMaterial));
     }
-    return material;
+    if (!featureGeometries.length) return;
+    const geometry = mergeGeometries(featureGeometries);
+    if (!geometry) return;
+    const material = new ShaderMaterial({
+      uniforms: {
+        tint: { value: new Color('#55aee0') },
+        focused: this.focused, detail: this.detail, selectedRegion: this.selectedRegion,
+      },
+      vertexShader: fillVertex, fragmentShader: fillFragment,
+      transparent: true, depthWrite: false, depthTest: true, toneMapped: false,
+    });
+    this.fill = new Mesh(geometry, material);
+    this.fill.raycast = () => {};
+    this.add(this.fill);
+  }
+
+  pickerFor(feature: HighlightFeature) {
+    return this.pickers.get(feature);
   }
 
   setSelection(code: string | null) {
-    this.selectedCode = code;
     this.focused.value = code ? 1 : 0;
-    for (const [feature, material] of this.fills) {
-      material.uniforms.selected.value = highlightCountryCode(feature, this.countries) === code ? 1 : 0;
-    }
+    this.selectedRegion.value = code ? this.regionIds.get(code) ?? 0 : 0;
     for (let i = 0; i < this.owners.length; i++) {
       this.selectedAttribute.setX(i, code && this.owners[i].has(code) ? 1 : 0);
     }
@@ -154,8 +177,11 @@ export class HighlightLayer extends Group {
   dispose() {
     this.geometry.dispose();
     this.materials.forEach(material => material.dispose());
-    this.fills.forEach(material => material.dispose());
-    this.fills.clear();
+    this.fill?.geometry.dispose();
+    this.fill?.material.dispose();
+    this.pickers.forEach(mesh => { mesh.geometry.dispose(); mesh.removeFromParent(); });
+    this.pickers.clear();
+    this.pickMaterial.dispose();
     this.removeFromParent();
   }
 }

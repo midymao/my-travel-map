@@ -1,5 +1,6 @@
 ---
 import SiteHeader from "../components/SiteHeader.astro";
+import PageScrollbar from "../components/PageScrollbar.astro";
 const { title, description = "我的旅行地图", flush = false } = Astro.props;
 ---
 
@@ -13,7 +14,7 @@ const { title, description = "我的旅行地图", flush = false } = Astro.props
     <meta property="og:description" content={description} />
     <link rel="icon" href="/favicon.svg" />
   </head>
-  <body>
+  <body id="page-scroll-content">
     <SiteHeader />
     {
       flush ? (
@@ -24,6 +25,7 @@ const { title, description = "我的旅行地图", flush = false } = Astro.props
         </main>
       )
     }
+    <PageScrollbar />
   </body>
 </html>
 
@@ -32,6 +34,41 @@ const { title, description = "我的旅行地图", flush = false } = Astro.props
     --site-header-height: 76px;
     scroll-padding-top: var(--site-header-height);
     scrollbar-gutter: stable;
+  }
+  @media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+    :global(html) {
+      --scrollbar-track: #0d0d0f;
+      --scrollbar-thumb: #636368;
+    }
+    @supports selector(::-webkit-scrollbar) {
+      :global(html::-webkit-scrollbar) {
+        width: 12px;
+      }
+      :global(html::-webkit-scrollbar-track:vertical) {
+        background: var(--scrollbar-track);
+      }
+      :global(html::-webkit-scrollbar-thumb:vertical) {
+        background: var(--scrollbar-thumb);
+        background-clip: padding-box;
+        border: 3px solid transparent;
+        border-radius: 999px;
+      }
+      :global(html::-webkit-scrollbar-thumb:vertical:hover) {
+        background-color: #85858b;
+      }
+      :global(html::-webkit-scrollbar-thumb:vertical:active) {
+        background-color: #a5a5ab;
+      }
+      :global(html::-webkit-scrollbar-button:vertical) {
+        display: none;
+      }
+    }
+    @supports not selector(::-webkit-scrollbar) {
+      :global(html) {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      }
+    }
   }
   body {
     margin: 0;
