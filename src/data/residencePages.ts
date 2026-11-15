@@ -6,7 +6,7 @@ export interface ResidencePage {
   quotationArt?: 'sichuan';
   quotationBackground?: string;
   heroImage: {
-    src: string; alt: string; position?: string;
+    imageBase: string; alt: string; position?: string;
     fit?: 'cover' | 'contain'; scale?: number;
     brightness?: number; contrast?: number; opacity?: number;
   } | null;
@@ -20,7 +20,7 @@ export const yangtzeDeltaPage: ResidencePage = {
   titleLines: ['Yangtze Delta', 'Metropolitan'],
   subtitle: '长三角大都会',
   heroImage: {
-    src: '/images/residences/yangtze.delta.metropolitan.jpg',
+    imageBase: '/images/residences/yangtze-delta-hero',
     alt: '长三角水岸建筑、云层与水面倒影',
     position: '75% 55%',
     brightness: 1.16,
@@ -46,9 +46,9 @@ export const sichuanBasinPage: ResidencePage = {
   titleLines: ['Sichuan', 'Basin'],
   subtitle: '四川盆地',
   quotationArt: 'sichuan',
-  quotationBackground: '/images/residences/sichuan-quotation-background.png',
+  quotationBackground: '/images/residences/sichuan-quotation-background.webp',
   heroImage: {
-    src: '/images/residences/sichuan.basin.jpg',
+    imageBase: '/images/residences/sichuan-basin-hero',
     alt: '黑色背景中探出头部的小猪',
     position: '50% 50%',
     fit: 'contain',
@@ -73,7 +73,7 @@ export const henanProvincePage: ResidencePage = {
   titleLines: ['Henan', 'Province'],
   subtitle: '河南省',
   heroImage: {
-    src: '/images/residences/henan-wheatfield.jpg',
+    imageBase: '/images/residences/henan-hero',
     alt: '河南麦田中的劳作人群、林带与远处山脉',
     position: '75% 65%',
   },
@@ -87,7 +87,7 @@ export const henanProvincePage: ResidencePage = {
     source: 'https://www.asiaphotos.org/CHINA/PROVINCES/HENAN/LIBRARY/Chapter%2015%20-%20Henan.pdf',
     language: 'en',
   },
-  quotationBackground: '/images/residences/henan-quotation-background.png',
+  quotationBackground: '/images/residences/henan-quotation-background.webp',
   sections: [{ title: '正文标题', paragraphs: ['正文内容待补充。'] }],
 };
 
@@ -96,7 +96,7 @@ export const easternAustraliaPage: ResidencePage = {
   titleLines: ['Eastern', 'Australia'],
   subtitle: '东澳大利亚',
   heroImage: {
-    src: '/images/residences/eastern.australia%20(2).jpg',
+    imageBase: '/images/residences/eastern-australia-hero',
     alt: '东澳大利亚蓝天下的湖畔草地、树木与远处山上的高塔',
     position: '65% 60%',
   },

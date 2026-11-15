@@ -538,12 +538,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     );
     const loader = new TextureLoader();
     async function loadDayTexture() {
+      const source = textureLimit <= 4096 ? "/textures/earth-day-4k.webp" : "/textures/earth-day-8k.jpg";
       let texture;
       try {
-        texture = await loader.loadAsync("/textures/earth-day-8k.jpg");
+        texture = await loader.loadAsync(source);
       } catch (err) {
-        console.warn("[globe] 8K 日间贴图加载失败，尝试标准贴图", err);
-        texture = await loader.loadAsync("/textures/earth-day.jpg");
+        if (source === "/textures/earth-day-8k.jpg") throw err;
+        texture = await loader.loadAsync("/textures/earth-day-8k.jpg");
       }
       const image = texture.image;
       const scale = Math.min(1, textureLimit / Math.max(image.width, image.height));
@@ -563,7 +564,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     let baseComplete = 0;
     const baseReady = <T,>(promise: Promise<T>) => promise.then(result => {
       baseComplete++;
-      loadStage(`Loading the 8K map and boundaries · ${baseComplete} / 3 ready`);
+      loadStage(`Loading the map and boundaries · ${baseComplete} / 3 ready`);
       return result;
     });
     const [dayTexture, topo, chinaProvinces] = await Promise.all([
@@ -1264,7 +1265,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       }));
     }
     loadingTitle.textContent = "Preparing the globe";
-    loadStage("Preparing the 8K globe…");
+    loadStage("Preparing the globe…");
     let backgroundStarted = false;
     async function startBackground() {
       if (backgroundStarted || !entered || !introComplete) return;
@@ -1294,10 +1295,10 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       }
     }
 
-    // Only the local 8K globe belongs to the foreground critical path.
+    // Only the local globe belongs to the foreground critical path.
     // No cache enumeration, imagery probe or external tiles can delay entry.
     try {
-      loadStage("Preparing the 8K day map for display…");
+      loadStage("Preparing the map for display…");
       await paintLoading();
       renderer.initTexture(dayTexture);
       loadStage("Finishing the globe lighting…");

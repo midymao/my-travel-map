@@ -9,7 +9,11 @@ const { page } = Astro.props;
     <div class:list={['hero-image', { 'is-empty': !page.heroImage, 'is-contained': page.heroImage?.fit === 'contain' }]}
       style={page.heroImage?.opacity ? `--hero-opacity:${page.heroImage.opacity};--hero-mobile-opacity:${page.heroImage.opacity * .72}` : undefined}
       aria-hidden={!page.heroImage ? 'true' : undefined}>
-      {page.heroImage && <img src={page.heroImage.src} alt={page.heroImage.alt}
+      {page.heroImage && <img
+        src={`${page.heroImage.imageBase}-1600.webp`}
+        srcset={[800, 1200, 1600].map(width => `${page.heroImage.imageBase}-${width}.webp ${width}w`).join(', ')}
+        sizes="(max-width: 760px) 80vw, (max-width: 1600px) 58vw, calc(8vw + 800px)"
+        alt={page.heroImage.alt}
         style={`object-position:${page.heroImage.position ?? '50% 50%'};object-fit:${page.heroImage.fit ?? 'cover'};transform:scale(${page.heroImage.scale ?? 1});filter:brightness(${page.heroImage.brightness ?? 1}) contrast(${page.heroImage.contrast ?? 1})`}
         fetchpriority="high" />}
     </div>

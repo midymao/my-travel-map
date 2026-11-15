@@ -9,6 +9,7 @@ import HomeLoading from "../components/HomeLoading.astro";
   description="一颗会转动的地球，记录我去过的国家和城市。"
   flush
 >
+  <link slot="head" rel="preload" as="image" href="/textures/earth-day-4k.webp" media="(pointer: coarse)" crossorigin="anonymous" fetchpriority="high" />
   <HomeLoading />
   <div data-home-content>
   <HomeGlobe />

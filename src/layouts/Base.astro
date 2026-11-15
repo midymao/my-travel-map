@@ -13,6 +13,7 @@ const { title, description = "我的旅行地图", flush = false } = Astro.props
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <link rel="icon" href="/favicon.svg" />
+    <slot name="head" />
   </head>
   <body id="page-scroll-content">
     <SiteHeader />
