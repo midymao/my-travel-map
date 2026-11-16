@@ -270,5 +270,10 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
     .is-open .is-front .caption-en { font-size: 20px; }
     .is-open .is-front .caption-zh { font-size: 10px; }
   }
+  @media (pointer: coarse) and (prefers-reduced-motion: no-preference) {
+    .is-scroll-preview:not(.is-open) [data-slot="0"] { transform: translate(-3%, -5%) rotate(-10deg); }
+    .is-scroll-preview:not(.is-open) [data-slot="1"] { transform: translate(3%, -5%) rotate(10deg); }
+    .is-scroll-preview:not(.is-open) .is-front { transform: translateY(-6px); }
+  }
   @media (prefers-reduced-motion: reduce) { .deck-photo, .photo-caption { transition: none; } }
 </style>

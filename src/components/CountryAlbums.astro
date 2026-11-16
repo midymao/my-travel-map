@@ -21,6 +21,47 @@ const rows = Array.from({ length: Math.ceil(albums.length / 2) }, (_, i) => albu
   </div>
 </section>}
 
+<script>
+  const mobilePreview = matchMedia('(pointer: coarse) and (prefers-reduced-motion: no-preference)');
+
+  for (const gallery of document.querySelectorAll('[data-travel-albums]')) {
+    const decks = gallery.querySelectorAll<HTMLElement>('[data-country-photo-deck]');
+    let centered: HTMLElement | undefined;
+    let frame = 0;
+
+    function updatePreview() {
+      frame = 0;
+      const center = window.innerHeight / 2;
+      let next: HTMLElement | undefined;
+      let nearest = Infinity;
+      if (mobilePreview.matches) {
+        for (const deck of decks) {
+          const bounds = deck.getBoundingClientRect();
+          if (center < bounds.top || center >= bounds.bottom) continue;
+          const distance = Math.abs(bounds.top + bounds.height / 2 - center);
+          if (distance < nearest) {
+            next = deck;
+            nearest = distance;
+          }
+        }
+      }
+      if (next === centered) return;
+      centered?.classList.remove('is-scroll-preview');
+      next?.classList.add('is-scroll-preview');
+      centered = next;
+    }
+
+    function schedulePreview() {
+      if (!frame && (mobilePreview.matches || centered)) frame = requestAnimationFrame(updatePreview);
+    }
+    window.addEventListener('scroll', schedulePreview, { passive: true });
+    window.addEventListener('resize', schedulePreview);
+    window.addEventListener('pageshow', schedulePreview);
+    mobilePreview.addEventListener('change', schedulePreview);
+    schedulePreview();
+  }
+</script>
+
 <style>
   .travel-albums { max-width: 1600px; box-sizing: border-box; margin: 0 auto; padding: clamp(64px, 7vw, 112px) clamp(24px, 5vw, 88px) 100px; }
   .album-rows { display: flex; flex-direction: column; gap: clamp(48px, 5vw, 80px); }

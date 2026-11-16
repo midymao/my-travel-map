@@ -83,9 +83,12 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
   <p class="note">
     <span class="mouse">拖动旋转 · Ctrl + 滚轮缩放</span>
-    <span class="touch">单指拖动旋转 · 双指缩放 · 从屏幕右侧边缘滑动翻页</span>
+    <span class="touch">单指拖动旋转 · 双指缩放</span>
   </p>
-  <a class="map-scroll" href="#travel-albums">向下浏览图册 <span aria-hidden="true">↓</span></a>
+  <div class="map-actions">
+    <button type="button" class="map-mode" data-map-mode aria-pressed="false" disabled>操作地球</button>
+    <a class="map-scroll" href="#travel-albums">向下浏览图册 <span aria-hidden="true">↓</span></a>
+  </div>
 
   <div class="dock">
     <button type="button" class="chip back country-reset" data-country-reset data-reset hidden>
@@ -264,12 +267,12 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   .note .touch {
     display: none;
   }
-  .map-scroll { display: none; }
+  .map-actions { display: none; }
   @media (pointer: coarse) {
     .note .mouse {
       display: none;
     }
-    .note .touch {
+    .hero[data-map-interactive] .note .touch {
       display: inline;
     }
   }
@@ -389,12 +392,11 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .overlay h1 { font-size: 1.65rem; }
   }
   @media (pointer: coarse) {
-    .hero::before {
+    .hero:not([data-map-interactive])::before {
       content: "";
       position: absolute;
-      inset: 0 0 0 auto;
+      inset: 0;
       z-index: 3;
-      width: 24px;
       touch-action: pan-y pinch-zoom;
     }
     .note {
@@ -402,7 +404,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       text-align: center;
       font-size: 10px;
     }
-    .map-scroll {
+    .map-actions {
       position: absolute;
       inset: auto 0 0;
       z-index: 4;
@@ -410,11 +412,30 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 12px;
+      touch-action: pan-y pinch-zoom;
+    }
+    .map-mode, .map-scroll {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 44px;
+      padding-inline: 12px;
       color: #b6bec8;
       font-size: 12px;
       text-decoration: none;
-      touch-action: pan-y pinch-zoom;
+    }
+    .map-mode {
+      border: 1px solid #ffffff26;
+      border-radius: 999px;
+      min-height: 36px;
+      background: #161b22;
+      font-family: inherit;
+    }
+    .map-mode:disabled { opacity: .5; }
+    .map-mode[aria-pressed="true"] {
+      color: #eef5fa;
+      border-color: #9cc4de88;
     }
   }
   @media (pointer: coarse) and (orientation: portrait) and (max-width: 760px) {
@@ -547,6 +568,15 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
   async function init() {
     const el = root.querySelector("[data-globe-canvas]");
+    const mapMode = root.querySelector<HTMLButtonElement>("[data-map-mode]");
+    function setMapInteractive(active: boolean) {
+      if (!mapMode) return;
+      root.toggleAttribute("data-map-interactive", active);
+      mapMode.setAttribute("aria-pressed", String(active));
+      mapMode.textContent = active ? "完成" : "操作地球";
+    }
+    mapMode?.addEventListener("click", () => setMapInteractive(!root.hasAttribute("data-map-interactive")));
+    root.querySelector(".map-scroll")?.addEventListener("click", () => setMapInteractive(false));
     const loadingEl = root.querySelector("[data-globe-loading]");
     const card = root.querySelector("[data-card]");
     const cardTitle = root.querySelector("[data-card-title]");
@@ -1256,7 +1286,10 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     ).observe(el);
     new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) world.resumeAnimation();
-      else world.pauseAnimation();
+      else {
+        world.pauseAnimation();
+        setMapInteractive(false);
+      }
     }).observe(el);
 
     function finishIntro(interrupted = true) {
@@ -1278,6 +1311,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       controls.enabled = true;
       controls.autoRotate = false;
       if (drawerToggle) drawerToggle.disabled = false;
+      if (mapMode) mapMode.disabled = false;
       loadingEl?.remove();
       revealHome();
       root.dataset.homeReady = "true";
