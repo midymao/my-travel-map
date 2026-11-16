@@ -50,7 +50,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   data-countries={JSON.stringify(countries)}
 >
   <div class="canvas" data-globe-canvas></div>
-  <p class="loading" data-globe-loading>地球加载中…</p>
+  <p class="loading" data-globe-loading role="status">地球加载中…</p>
 
   <header class="overlay">
     <h1>Midy's Travel Map</h1>
@@ -72,7 +72,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       ))}
     </ul>
   </nav>
-  <button type="button" class="country-drawer-toggle" data-country-drawer-toggle
+  <button type="button" class="country-drawer-toggle" data-country-drawer-toggle disabled
     aria-controls="globe-country-navigation" aria-expanded="false" aria-label="展开国家导航">
     <svg width="16" height="24" viewBox="0 0 16 24" fill="none" aria-hidden="true">
       <path d="m5 6 6 6-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
@@ -83,8 +83,9 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
   <p class="note">
     <span class="mouse">拖动旋转 · Ctrl + 滚轮缩放</span>
-    <span class="touch">左右滑动旋转 · 双指缩放 · 上下滑动翻页</span>
+    <span class="touch">单指拖动旋转 · 双指缩放 · 从屏幕右侧边缘滑动翻页</span>
   </p>
+  <a class="map-scroll" href="#travel-albums">向下浏览图册 <span aria-hidden="true">↓</span></a>
 
   <div class="dock">
     <button type="button" class="chip back country-reset" data-country-reset data-reset hidden>
@@ -263,6 +264,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   .note .touch {
     display: none;
   }
+  .map-scroll { display: none; }
   @media (pointer: coarse) {
     .note .mouse {
       display: none;
@@ -386,6 +388,38 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .card { max-height: min(54svh, 380px); }
     .overlay h1 { font-size: 1.65rem; }
   }
+  @media (pointer: coarse) {
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 0 auto;
+      z-index: 3;
+      width: 24px;
+      touch-action: pan-y pinch-zoom;
+    }
+    .note {
+      inset: auto 24px 47px;
+      text-align: center;
+      font-size: 10px;
+    }
+    .map-scroll {
+      position: absolute;
+      inset: auto 0 0;
+      z-index: 4;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #b6bec8;
+      font-size: 12px;
+      text-decoration: none;
+      touch-action: pan-y pinch-zoom;
+    }
+  }
+  @media (pointer: coarse) and (orientation: portrait) and (max-width: 760px) {
+    .hero { min-height: 0; }
+  }
   @media (prefers-reduced-motion: reduce) {
     .country-drawer, .country-navigation, .country-drawer.is-open .country-navigation, .country-drawer-toggle, .country-drawer-toggle svg { transition: none; }
     .country-nav-button, .country-code, .country-dot { transition: none; }
@@ -428,6 +462,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   const drawerNavigation = root?.querySelector<HTMLElement>("#globe-country-navigation");
   function setCountryDrawer(open: boolean) {
     if (!countryDrawer || !drawerToggle || !drawerNavigation) return;
+    if (open && drawerToggle.disabled) return;
     if (!open) {
       hideCountryTooltip();
       if (drawerNavigation.contains(document.activeElement)) drawerToggle.focus({ preventScroll: true });
@@ -485,9 +520,10 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   const loadingDetail = document.querySelector("[data-load-detail]");
   const retryButton = document.querySelector<HTMLButtonElement>("[data-load-retry]");
   const homeContent = document.querySelector<HTMLElement>("[data-home-content]");
-  if (homeContent) homeContent.inert = true;
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  if (!coarse && homeContent) homeContent.inert = true;
   function loadStage(detail: string) {
-    if (!loadingPage || loadingPage.hidden) return;
+    if (coarse || !loadingPage || loadingPage.hidden) return;
     loadingDetail.textContent = detail;
   }
   function paintLoading() {
@@ -523,7 +559,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    const coarse = window.matchMedia("(pointer: coarse)").matches;
     const FLY_MS = reduceMotion ? 0 : 1800;
 
     // 先创建渲染器，按真实 GPU 上限选择贴图尺寸。
@@ -628,7 +663,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     // 渲染质量
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     root.dataset.textureWidth = String(dayTexture.image.width);
-    if (coarse) renderer.domElement.style.touchAction = "pan-y";
 
     // Stable overview coverage stays under the detail engine throughout flights.
     const regionalAltitude = 0.22;
@@ -1243,6 +1277,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       tileSourceReady = true;
       controls.enabled = true;
       controls.autoRotate = false;
+      if (drawerToggle) drawerToggle.disabled = false;
       loadingEl?.remove();
       revealHome();
       root.dataset.homeReady = "true";
@@ -1295,8 +1330,11 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       }
     }
 
-    // Only the local globe belongs to the foreground critical path.
-    // No cache enumeration, imagery probe or external tiles can delay entry.
+    // Let the mobile renderer draw normally without a separate shader warmup.
+    if (coarse) {
+      enterHome();
+      return;
+    }
     try {
       loadStage("Preparing the map for display…");
       await paintLoading();

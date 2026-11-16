@@ -2,6 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import { residences } from "../../data/residences";
 import ResidenceStory from "../../components/ResidenceStory.astro";
+import HomeLoading from "../../components/HomeLoading.astro";
 import { yangtzeDeltaPage, sichuanBasinPage, henanProvincePage, easternAustraliaPage } from "../../data/residencePages";
 
 export function getStaticPaths() {
@@ -19,7 +20,10 @@ const page = Astro.params.region === 'yangtze-delta-metropolitan' ? yangtzeDelta
 ---
 
 <Base title={`${name} · Midy's Adventure`} flush={!!page}>
-  {page ? <ResidenceStory page={page} /> : <h1 class="sr-only">{name}</h1>}
+  {page ? <>
+    {(page.heroImage || page.quotationBackground) && <HomeLoading residence />}
+    <ResidenceStory page={page} />
+  </> : <h1 class="sr-only">{name}</h1>}
 </Base>
 
 <style>

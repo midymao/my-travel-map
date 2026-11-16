@@ -14,7 +14,13 @@ const englishTitles: Record<string, string> = {
 const slides = photos.map(photo => {
   const city = country.cities.find(city => city.id === photo.cityId);
   if (!city) throw new Error(`Missing city ${photo.cityId} in ${country.code} photo deck`);
-  return { ...photo, title: city.title, titleEn: englishTitles[city.id] ?? city.id.replaceAll('-', ' '), href: city.href };
+  return {
+    ...photo,
+    previewBase: photo.src.replace('/_optimized/', '/_previews/').replace(/\.webp$/, ''),
+    title: city.title,
+    titleEn: englishTitles[city.id] ?? city.id.replaceAll('-', ' '),
+    href: city.href,
+  };
 });
 const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 1.2));
 ---
@@ -25,11 +31,16 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
       <a class:list={['deck-photo', { 'is-front': index === initialIndex, 'is-portrait': slide.aspectRatio < 1 }]} data-deck-photo={index} href={slide.href}
         aria-label={index === initialIndex ? '打开' + country.name + '图册' : '选择' + slide.title + '照片 ' + (index + 1)}
         tabindex={index === initialIndex ? 0 : -1} style={'--ratio:' + slide.aspectRatio}>
-        <img src={slide.src} alt="" loading="lazy" decoding="async" width={Math.round(800 * slide.aspectRatio)} height="800" style={'object-position:' + (slide.position ?? '50% 50%')} />
+        <img src={`${slide.previewBase}-900.webp`}
+          srcset={`${slide.previewBase}-640.webp 640w, ${slide.previewBase}-900.webp 900w`}
+          sizes="(max-width: 900px) and (orientation: portrait) calc(100vw - 52px), (max-width: 900px) calc(50vw - 102px), (max-width: 1600px) calc(43vw - 60px), 630px"
+          alt="" loading="lazy" decoding="async" width={Math.round(800 * slide.aspectRatio)} height="800"
+          style={'object-position:' + (slide.position ?? '50% 50%')} />
         <span class="photo-caption"><span class="caption-names"><span class="caption-en" lang="en">{slide.titleEn}</span><span class="caption-zh" lang="zh-CN">{slide.title}</span></span><span class="visit-arrow" aria-hidden="true">↗</span></span>
       </a>
     ))}
   </div>
+  <p class="deck-country" aria-hidden="true">{country.name}</p>
   <p class="deck-status" data-deck-status aria-live="polite" aria-atomic="true"></p>
 </div>
 
@@ -234,9 +245,23 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
     .country-photo-deck:not(.is-open):hover [data-slot="3"] { transform: translate(2%,-5%) rotate(5deg); }
     .country-photo-deck:not(.is-open):hover .is-front { transform: translateY(-6px); }
   }
+  .deck-country { display: none; }
   @media (max-width: 900px) and (orientation: portrait) {
-    .country-photo-deck { padding: 48px 24px 12px; }
-    .deck-photo { border-radius: 18px; }
+    .country-photo-deck { padding: 38px 12px 0; }
+    .deck-country {
+      display: block;
+      margin: 17px 2px 0;
+      color: #d5cfc7;
+      font-size: 13px;
+      letter-spacing: .14em;
+    }
+    .deck-photo {
+      border-radius: 18px;
+      box-shadow: 0 0 0 1px #f7e6d324, 0 8px 22px #0006;
+    }
+    .country-photo-deck:not(.is-open) [data-slot="0"]:not(.is-front) { top: -12%; left: 1%; }
+    .country-photo-deck:not(.is-open) [data-slot="1"]:not(.is-front) { top: -7%; right: -1%; left: auto; }
+    .country-photo-deck:not(.is-open) :is([data-slot="2"], [data-slot="3"]):not(.is-front) { opacity: 0; }
     .photo-caption { padding: 9px 10px 22px; }
     .caption-names { gap: 4px; }
     .caption-en { font-size: 12px; }

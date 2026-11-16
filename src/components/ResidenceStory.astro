@@ -4,7 +4,7 @@ interface Props { page: ResidencePage }
 const { page } = Astro.props;
 ---
 
-<main class="residence-story" data-residence-story>
+<main class="residence-story" data-residence-story data-quotation-background={page.quotationBackground}>
   <section class="residence-hero" aria-labelledby="residence-title">
     <div class:list={['hero-image', { 'is-empty': !page.heroImage, 'is-contained': page.heroImage?.fit === 'contain' }]}
       style={page.heroImage?.opacity ? `--hero-opacity:${page.heroImage.opacity};--hero-mobile-opacity:${page.heroImage.opacity * .72}` : undefined}
@@ -65,9 +65,33 @@ const { page } = Astro.props;
 </main>
 
 <script is:inline>
-  (() => {
+  (async () => {
     const story = document.currentScript?.previousElementSibling;
     if (!(story instanceof HTMLElement) || !story.matches('[data-residence-story]')) return;
+    const loader = document.querySelector('[data-residence-loading]');
+    if (loader && !loader.hidden) {
+      story.inert = true;
+      let deadline;
+      try {
+        const photo = story.querySelector('.hero-image img');
+        const images = photo ? [photo] : [];
+        if (story.dataset.quotationBackground) {
+          const background = new Image();
+          background.src = story.dataset.quotationBackground;
+          images.push(background);
+        }
+        await Promise.race([
+          Promise.allSettled(images.map(image => image.decode())),
+          new Promise(resolve => { deadline = setTimeout(resolve, 10000); }),
+        ]);
+      } finally {
+        clearTimeout(deadline);
+        loader.hidden = true;
+        story.inert = false;
+        delete document.documentElement.dataset.homeLoadingActive;
+        document.querySelector('.site-header')?.removeAttribute('inert');
+      }
+    }
     const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
     if (motionPreference.matches || !('IntersectionObserver' in window) || !story.animate) return;
 
@@ -91,7 +115,7 @@ const { page } = Astro.props;
       { opacity: 1, transform: 'translate3d(0, 0, 0)' },
     ], { delay });
 
-    // Inline initialization runs as the markup is parsed: no hidden page or JS dependency.
+    // Start the entrance in the same turn that removes the loading cover.
     rise(story.querySelector('.eyebrow'), 40, 10);
     story.querySelectorAll('h1 span').forEach((line, index) => rise(line, 140 + index * 120, 28));
     rise(story.querySelector('.subtitle'), 430, 14);
