@@ -89,10 +89,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     <div class="map-control-row">
       <button type="button" class="map-zoom" data-map-zoom="out" aria-label="缩小地图">−</button>
       <button type="button" class="map-mode" data-map-mode aria-label="操作地球" aria-pressed="false" disabled>
-        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" />
-          <ellipse cx="12" cy="12" rx="4" ry="9" />
-          <path d="M3 12h18" />
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" aria-hidden="true">
+          <g transform="rotate(-23 12 12)">
+            <circle cx="12" cy="12" r="9" />
+            <ellipse cx="12" cy="12" rx="3.8" ry="9" opacity=".82" />
+            <path d="M3.4 12q8.6 3.7 17.2 0" />
+            <path d="M5.2 7.1q6.8 2.6 13.6 0" opacity=".52" />
+          </g>
         </svg>
       </button>
       <button type="button" class="map-zoom" data-map-zoom="in" aria-label="放大地图">+</button>
@@ -476,14 +479,16 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       width: 44px;
       box-sizing: border-box;
       transform: translateX(-50%);
-      border: 1px solid #ffffff26;
+      border: 1px solid #e6dfd22b;
       border-radius: 999px;
-      background: #161c24;
-      transition: width .44s cubic-bezier(.2, .85, .24, 1), border-color .25s ease;
+      background: linear-gradient(180deg, #20262e, #14191f);
+      box-shadow: 0 4px 14px #0005;
+      transition: width .32s cubic-bezier(.34, 0, .2, 1) .06s, border-color .25s ease;
     }
     .hero[data-map-interactive] .map-control-row::before {
       width: 100%;
-      border-color: #9cc4de88;
+      border-color: #ddd1ba62;
+      transition: width .46s cubic-bezier(.18, .82, .24, 1), border-color .25s ease;
     }
     .map-control-row::after {
       content: "";
@@ -491,19 +496,26 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       z-index: -1;
       top: 4px;
       left: 50%;
-      width: 44px;
+      width: 40px;
       height: 36px;
       border-radius: 999px;
-      background: #a9d5fb38;
-      box-shadow: inset 0 0 0 1px #c4e0f42e;
+      background: linear-gradient(180deg, #f0e2c93b, #e3d2b91c);
+      box-shadow: inset 0 0 0 1px #f2e5ce32;
       opacity: 0;
       transform: translateX(calc(-50% + var(--map-highlight-offset, 0px)));
-      transition: transform .19s cubic-bezier(.2, .8, .3, 1), opacity .2s ease;
+      transition: transform .25s cubic-bezier(.22, .65, .32, 1), opacity .17s ease;
       pointer-events: none;
     }
-    .hero[data-map-interactive] .map-control-row::after { opacity: 1; }
+    .hero[data-map-interactive] .map-control-row::after {
+      opacity: 1;
+      transition: transform .25s cubic-bezier(.22, .65, .32, 1), opacity .2s ease .04s;
+    }
     .map-control-row[data-zoom-feedback="out"] { --map-highlight-offset: -44px; }
     .map-control-row[data-zoom-feedback="in"] { --map-highlight-offset: 44px; }
+    .map-control-row[data-zoom-feedback]::after { animation: map-highlight-stretch .2s ease-out; }
+    @keyframes map-highlight-stretch {
+      35% { scale: 1.16 .94; }
+    }
     .map-mode, .map-scroll {
       display: inline-flex;
       align-items: center;
@@ -545,7 +557,8 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       transition-delay: .04s, .09s, 0s;
     }
     .map-mode:disabled { opacity: .5; }
-    .map-mode[aria-pressed="true"] { color: #c4e0f4; }
+    .map-mode { color: #e0d6c6; }
+    .map-mode[aria-pressed="true"] { color: #fff2db; }
     :is(.map-mode, .map-zoom):focus-visible { outline: 2px solid #c4e0f4; outline-offset: 3px; }
   }
   @media (pointer: coarse) and (orientation: portrait) and (max-width: 760px) {
@@ -556,7 +569,15 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .country-nav-button, .country-code, .country-dot { transition: none; }
     .country-nav-button:is(:hover, :focus-visible, :active) { transform: none; }
     .country-tooltip { animation: none; }
-    .map-mode, .map-zoom, .map-control-row::before, .map-control-row::after { transition: none; }
+    :is(.map-mode, .map-zoom),
+    .hero[data-map-interactive] .map-zoom,
+    .hero[data-map-interactive] .map-control-row::before,
+    .hero[data-map-interactive] .map-control-row::after,
+    .hero .map-control-row::before,
+    .hero .map-control-row::after {
+      transition: none;
+      animation: none;
+    }
   }
 </style>
 
@@ -711,9 +732,9 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
           if (mapControlRow) {
             clearTimeout(zoomFeedbackTimer);
             mapControlRow.dataset.zoomFeedback = button.dataset.mapZoom;
-            zoomFeedbackTimer = setTimeout(clearZoomFeedback, 190);
+            zoomFeedbackTimer = setTimeout(clearZoomFeedback, 235);
           }
-          zoomBy(button.dataset.mapZoom === "in" ? -0.24 : 0.24, "button");
+          zoomBy(button.dataset.mapZoom === "in" ? -zoomStep : zoomStep, "button");
         }
       });
     });
@@ -837,6 +858,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
     // Stable overview coverage stays under the detail engine throughout flights.
     const regionalAltitude = 0.22;
+    const overviewMaxDistance = 420;
     const regionalZoomFactor = 0.78;
     const minCountryAltitude = regionalAltitude / regionalZoomFactor;
     let zoomFloor = regionalAltitude;
@@ -1062,11 +1084,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     let flightUntil = 0;
     const wheelResponse = 15.5;
     const maxWheelLead = 0.65;
+    const wheelNotch = 120;
+    const zoomStep = wheelNotch * 0.0027;
     type ZoomInput = "wheel" | "pinch" | "button";
     let zoomInput: ZoomInput = "wheel";
     let wheelVelocity = 0;
     let wheelTail = 0;
-    let lastWheelAt = -Infinity;
+    let lastZoomStepAt = -Infinity;
     function stopZoom() {
       if (!zooming) return;
       zooming = false;
@@ -1086,7 +1110,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       const current = Math.log(altNow());
       const offset = current - targetLogAltitude;
       let next: number;
-      if (zoomInput === "wheel") {
+      if (zoomInput !== "pinch") {
         // Keep velocity between wheel events so a burst reads as one movement.
         const decay = Math.exp(-wheelResponse * elapsed);
         const drift = wheelVelocity + wheelResponse * offset;
@@ -1137,25 +1161,25 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       const continuing = zooming && input === zoomInput && logDelta * (targetLogAltitude - current) > 0;
       const previousTarget = continuing ? targetLogAltitude - wheelTail : current;
       const floor = Math.log(zoomFloor);
-      const ceiling = Math.log(controls.maxDistance / 100 - 1);
-      const wheel = input === "wheel";
+      const ceiling = Math.log(overviewMaxDistance / 100 - 1);
+      const stepped = input !== "pinch";
       const clampTarget = (value: number) => {
-        const paced = wheel
+        const paced = stepped
           ? current + Math.max(-maxWheelLead, Math.min(maxWheelLead, value - current))
           : value;
         return Math.min(ceiling, Math.max(floor, paced));
       };
       const baseTarget = clampTarget(previousTarget + logDelta);
       const now = performance.now();
-      const wheelBurst = continuing && now - lastWheelAt < 120;
-      const tail = wheel && !reduceMotion
-        ? Math.sign(logDelta) * Math.min(0.18, Math.abs(logDelta) * (wheelBurst ? 0.66 : 0.34))
+      const burst = continuing && now - lastZoomStepAt < 120;
+      const tail = stepped && !reduceMotion
+        ? Math.sign(logDelta) * Math.min(0.18, Math.abs(logDelta) * (burst ? 0.66 : 0.34))
         : 0;
       const nextTarget = baseTarget + tail;
       // Same-direction ticks can extend the glide, never pull the target back.
-      const keepLead = continuing && wheel && (targetLogAltitude - nextTarget) * logDelta > 0;
+      const keepLead = continuing && stepped && (targetLogAltitude - nextTarget) * logDelta > 0;
       const target = clampTarget(keepLead ? targetLogAltitude : nextTarget);
-      if (wheel) lastWheelAt = now;
+      if (stepped) lastZoomStepAt = now;
       wheelTail = target - baseTarget;
       if (Math.abs(target - (zooming ? targetLogAltitude : current)) < 1e-8) return;
       stopMouseCoast();
@@ -1186,9 +1210,9 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         e.preventDefault();
         let d = e.deltaY;
         if (e.deltaMode === 1) d *= 33;
-        else if (e.deltaMode === 2) d *= 120;
-        d = Math.max(-120, Math.min(120, d));
-        zoomBy(d * 0.0027, "wheel");
+        else if (e.deltaMode === 2) d *= wheelNotch;
+        d = Math.max(-wheelNotch, Math.min(wheelNotch, d));
+        zoomBy((d / wheelNotch) * zoomStep, "wheel");
       },
       { capture: true, passive: false },
     );
@@ -1430,9 +1454,20 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     root.dataset.surface = "local";
     root.dataset.introState = "waiting";
 
-    new ResizeObserver(() =>
-      world.width(el.clientWidth).height(el.clientHeight),
-    ).observe(el);
+    const camera = world.camera();
+    const baseFov = camera.fov;
+    const halfFovTangent = Math.tan(baseFov * Math.PI / 360);
+    new ResizeObserver(() => {
+      const width = el.clientWidth;
+      const height = el.clientHeight;
+      if (!width || !height) return;
+      world.width(width).height(height);
+      // Keep the same viewing angle along the shorter dimension in portrait.
+      camera.fov = width < height
+        ? Math.atan(halfFovTangent * height / width) * 360 / Math.PI
+        : baseFov;
+      camera.updateProjectionMatrix();
+    }).observe(el);
     new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) world.resumeAnimation();
       else {
@@ -1446,7 +1481,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       clearTimeout(introTimer);
       world.pointOfView(interrupted ? world.pointOfView() : { ...start, altitude: 2.4 }, 0);
       introComplete = true;
-      controls.maxDistance = 420;
+      controls.maxDistance = overviewMaxDistance;
       controls.autoRotate = !reduceMotion && !selectedCode;
       root.dataset.introState = "complete";
       // A selected destination's flight can keep the background queue paused.
@@ -1468,7 +1503,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         void import("./globePerformance").then(({ installGlobePerformance }) => {
           recordTileWork = installGlobePerformance(renderer,
             () => mouseDragging ? "拖动"
-              : zooming && zoomInput === "wheel" && performance.now() - lastWheelAt < 85 ? "滚轮" : null,
+              : zooming && zoomInput === "wheel" && performance.now() - lastZoomStepAt < 85 ? "滚轮" : null,
             () => [overview, satellite]);
         });
       }
