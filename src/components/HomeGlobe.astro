@@ -713,11 +713,32 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     const mapMode = root.querySelector<HTMLButtonElement>("[data-map-mode]");
     const mapControlRow = root.querySelector<HTMLElement>(".map-control-row");
     let zoomFeedbackTimer: ReturnType<typeof setTimeout> | undefined;
-    let zoomDrag: { pointerId: number; startX: number; lastX: number; active: boolean } | undefined;
+    const zoomDragDeadZone = 6;
+    let zoomDrag: { pointerId: number; startX: number; targetRate: number; rate: number; active: boolean } | undefined;
+    let zoomDragFrame = 0;
+    let lastZoomDragTime = 0;
     let suppressMapClick = false;
+    function advanceZoomDrag(now: number) {
+      zoomDragFrame = 0;
+      if (!zoomDrag?.targetRate) return;
+      const elapsedSeconds = Math.min(50, Math.max(0, now - lastZoomDragTime)) / 1000;
+      lastZoomDragTime = now;
+      zoomDrag.rate += (zoomDrag.targetRate - zoomDrag.rate) * -Math.expm1(-elapsedSeconds / 0.14);
+      if (elapsedSeconds > 0) zoomBy(zoomDrag.rate * elapsedSeconds, "drag");
+      zoomDragFrame = requestAnimationFrame(advanceZoomDrag);
+    }
+    function pauseZoomDrag() {
+      cancelAnimationFrame(zoomDragFrame);
+      zoomDragFrame = 0;
+      if (zooming && zoomInput === "drag") {
+        stopZoom();
+        deferDetails(100);
+      }
+    }
     function endZoomDrag() {
       const pointerId = zoomDrag?.pointerId;
       zoomDrag = undefined;
+      if (pointerId !== undefined) pauseZoomDrag();
       mapControlRow?.removeAttribute("data-zoom-dragging");
       mapControlRow?.style.removeProperty("--map-highlight-offset");
       if (pointerId !== undefined && mapMode?.hasPointerCapture(pointerId)) {
@@ -751,32 +772,44 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       if (!event.isPrimary || event.button !== 0 || zoomDrag) return;
       suppressMapClick = false;
       if (!root.hasAttribute("data-map-interactive")) return;
-      zoomDrag = { pointerId: event.pointerId, startX: event.clientX, lastX: event.clientX, active: false };
+      zoomDrag = { pointerId: event.pointerId, startX: event.clientX, targetRate: 0, rate: 0, active: false };
       mapMode.setPointerCapture(event.pointerId);
     });
     mapMode?.addEventListener("pointermove", event => {
       if (!zoomDrag || event.pointerId !== zoomDrag.pointerId || !mapControlRow) return;
       const offset = event.clientX - zoomDrag.startX;
       if (!zoomDrag.active) {
-        if (Math.abs(offset) < 6) return;
+        if (Math.abs(offset) < zoomDragDeadZone) return;
         zoomDrag.active = true;
         suppressMapClick = true;
         clearZoomFeedback();
         mapControlRow.setAttribute("data-zoom-dragging", "");
       }
       const buttonWidth = mapMode.offsetWidth;
-      const delta = event.clientX - zoomDrag.lastX;
-      zoomDrag.lastX = event.clientX;
-      if (!buttonWidth) return;
+      if (buttonWidth <= zoomDragDeadZone) return;
       const highlightOffset = Math.max(-buttonWidth, Math.min(buttonWidth, offset));
       mapControlRow.style.setProperty("--map-highlight-offset", `${highlightOffset}px`);
-      zoomBy(-delta * zoomStep / buttonWidth, "drag");
+      const strength = Math.max(0, Math.abs(highlightOffset) - zoomDragDeadZone) / (buttonWidth - zoomDragDeadZone);
+      const targetRate = -Math.sign(highlightOffset) * strength ** 1.35 * 0.9;
+      if (!targetRate || targetRate * zoomDrag.targetRate < 0) {
+        zoomDrag.rate = 0;
+        pauseZoomDrag();
+      }
+      zoomDrag.targetRate = targetRate;
+      if (targetRate && !zoomDragFrame) {
+        lastZoomDragTime = performance.now();
+        zoomDragFrame = requestAnimationFrame(advanceZoomDrag);
+      }
     });
     for (const type of ["pointerup", "pointercancel", "lostpointercapture"] as const) {
       mapMode?.addEventListener(type, event => {
         if (event.pointerId === zoomDrag?.pointerId) endZoomDrag();
       });
     }
+    window.addEventListener("blur", endZoomDrag);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) endZoomDrag();
+    });
     mapMode?.addEventListener("click", event => {
       if (suppressMapClick && event.detail > 0) {
         suppressMapClick = false;
