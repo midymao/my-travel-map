@@ -56,7 +56,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     <h1>Midy's Travel Map</h1>
     <p class="stats">{countries.length} 个国家 · {cityCount} 个城市</p>
   </header>
-  <aside class="country-drawer" data-country-drawer aria-label="国家导航侧边栏">
+  <aside class="country-drawer" data-country-drawer aria-label="国家导航">
   <nav class="country-navigation" id="globe-country-navigation" aria-label="去过的国家" inert>
     <ul class="country-grid">
       {countries.map((c) => (
@@ -74,6 +74,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   </nav>
   <button type="button" class="country-drawer-toggle" data-country-drawer-toggle disabled
     aria-controls="globe-country-navigation" aria-expanded="false" aria-label="展开国家导航">
+    <span class="country-drawer-label">国家</span>
     <svg width="16" height="24" viewBox="0 0 16 24" fill="none" aria-hidden="true">
       <path d="m5 6 6 6-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
@@ -86,7 +87,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   </p>
   <div class="map-actions">
     <p class="map-gesture-hint">单指拖动旋转 · 双指缩放</p>
-    <button type="button" class="map-mode" data-map-mode aria-pressed="false" disabled>操作地球</button>
+    <button type="button" class="map-mode" data-map-mode aria-label="操作地球" aria-pressed="false" disabled>
+      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <ellipse cx="12" cy="12" rx="4" ry="9" />
+        <path d="M3 12h18" />
+      </svg>
+    </button>
     <a class="map-scroll" href="#travel-albums">浏览图册 <span aria-hidden="true">↓</span></a>
   </div>
 
@@ -184,6 +191,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   }
   .country-drawer-toggle:focus-visible { outline: 1px solid #a7bacb; outline-offset: 3px; }
   .country-drawer-toggle svg { transition: transform .4s ease; }
+  .country-drawer-label { display: none; }
   .country-drawer.is-open .country-drawer-toggle svg { transform: rotate(180deg); }
   .overlay h1 {
     margin: 0;
@@ -392,6 +400,43 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .overlay h1 { font-size: 1.65rem; }
   }
   @media (pointer: coarse) {
+    .country-drawer {
+      inset: auto 12px 8px;
+      width: auto;
+      height: 44px;
+      transform: none;
+      transition: none;
+    }
+    .country-drawer.is-open { transform: none; }
+    .country-drawer-toggle {
+      flex: 0 0 auto;
+      width: auto;
+      height: 44px;
+      padding-inline: 14px;
+      border: 1px solid rgba(216, 225, 235, .2);
+      border-radius: 999px;
+      font: inherit;
+      font-size: 12px;
+      touch-action: pan-y;
+    }
+    .country-drawer-toggle svg { display: none; }
+    .country-drawer-label { display: inline; }
+    .country-navigation {
+      position: absolute;
+      inset: auto 0 calc(100% + 8px);
+      max-height: min(42svh, 340px);
+      padding: 12px;
+      border: 1px solid rgba(216, 225, 235, .15);
+      border-radius: 16px;
+      background: rgba(10, 14, 19, .94);
+      touch-action: pan-y;
+      transform: translateY(14px);
+      transition: transform .28s ease, opacity .22s ease, visibility 0s linear .28s;
+    }
+    .country-drawer.is-open .country-navigation {
+      transform: translateY(0);
+      transition: transform .28s ease, opacity .22s ease, visibility 0s;
+    }
     .hero:not([data-map-interactive])::before {
       content: "";
       position: absolute;
@@ -435,17 +480,19 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       border: 1px solid #ffffff26;
       border-radius: 999px;
       justify-content: center;
-      min-width: 112px;
-      background: #222b35;
-      color: #eef5fa;
-      font-weight: 600;
-      font-family: inherit;
+      width: 44px;
+      padding: 0;
+      background: #161c24;
+      color: #b6bec8;
+      transition: color .2s ease, background-color .2s ease, border-color .2s ease;
     }
     .map-mode:disabled { opacity: .5; }
     .map-mode[aria-pressed="true"] {
-      color: #eef5fa;
+      color: #122030;
+      background: #c4e0f4;
       border-color: #9cc4de88;
     }
+    .map-mode:focus-visible { outline: 2px solid #c4e0f4; outline-offset: 3px; }
   }
   @media (pointer: coarse) and (orientation: portrait) and (max-width: 760px) {
     .hero { min-height: 0; }
@@ -455,6 +502,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .country-nav-button, .country-code, .country-dot { transition: none; }
     .country-nav-button:is(:hover, :focus-visible, :active) { transform: none; }
     .country-tooltip { animation: none; }
+    .map-mode { transition: none; }
   }
 </style>
 
@@ -490,6 +538,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   const countryDrawer = root?.querySelector<HTMLElement>("[data-country-drawer]");
   const drawerToggle = root?.querySelector<HTMLButtonElement>("[data-country-drawer-toggle]");
   const drawerNavigation = root?.querySelector<HTMLElement>("#globe-country-navigation");
+  const drawerLabel = drawerToggle?.querySelector(".country-drawer-label");
   function setCountryDrawer(open: boolean) {
     if (!countryDrawer || !drawerToggle || !drawerNavigation) return;
     if (open && drawerToggle.disabled) return;
@@ -501,6 +550,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     drawerNavigation.inert = !open;
     drawerToggle.setAttribute("aria-expanded", String(open));
     drawerToggle.setAttribute("aria-label", open ? "收起国家导航" : "展开国家导航");
+    if (drawerLabel) drawerLabel.textContent = open ? "收起" : "国家";
   }
   drawerToggle?.addEventListener("pointerenter", event => {
     if (event.pointerType === "mouse") setCountryDrawer(true);
@@ -582,7 +632,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       if (!mapMode) return;
       root.toggleAttribute("data-map-interactive", active);
       mapMode.setAttribute("aria-pressed", String(active));
-      mapMode.textContent = active ? "完成" : "操作地球";
     }
     mapMode?.addEventListener("click", () => setMapInteractive(!root.hasAttribute("data-map-interactive")));
     root.querySelector(".map-scroll")?.addEventListener("click", () => setMapInteractive(false));
@@ -1161,6 +1210,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     function showCountry(code) {
       const c = countries.find((x) => x.code === code);
       if (!c) return;
+      if (coarse) setCountryDrawer(false);
       selectedCode = code;
       hideCityUi();
       syncChips();
@@ -1183,9 +1233,14 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       cardImage.style.objectPosition = image.position;
       cardImage.style.objectFit = image.fit ?? "cover";
       cardImage.onerror = () => {
-        if (request === imageRequest) cardMedia.hidden = true;
+        if (request !== imageRequest) return;
+        if (cardImage.getAttribute("src") !== image.src) {
+          cardImage.src = image.src;
+        } else {
+          cardMedia.hidden = true;
+        }
       };
-      cardImage.src = image.src;
+      cardImage.src = image.src.replace("/images/places/", "/images/places/_cards/").replace(/\.[^./]+$/, ".webp");
       cardImage.hidden = false;
     }
 
