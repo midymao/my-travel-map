@@ -83,11 +83,11 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
   <p class="note">
     <span class="mouse">拖动旋转 · Ctrl + 滚轮缩放</span>
-    <span class="touch">单指拖动旋转 · 双指缩放</span>
   </p>
   <div class="map-actions">
+    <p class="map-gesture-hint">单指拖动旋转 · 双指缩放</p>
     <button type="button" class="map-mode" data-map-mode aria-pressed="false" disabled>操作地球</button>
-    <a class="map-scroll" href="#travel-albums">向下浏览图册 <span aria-hidden="true">↓</span></a>
+    <a class="map-scroll" href="#travel-albums">浏览图册 <span aria-hidden="true">↓</span></a>
   </div>
 
   <div class="dock">
@@ -264,18 +264,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     font-size: 0.75rem;
     opacity: 0.5;
   }
-  .note .touch {
-    display: none;
-  }
   .map-actions { display: none; }
-  @media (pointer: coarse) {
-    .note .mouse {
-      display: none;
-    }
-    .hero[data-map-interactive] .note .touch {
-      display: inline;
-    }
-  }
 
 
   .dock {
@@ -410,22 +399,28 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       z-index: 3;
       touch-action: pan-y pinch-zoom;
     }
-    .note {
-      inset: auto 24px 47px;
-      text-align: center;
-      font-size: 10px;
-    }
+    .note { display: none; }
+    .dock { bottom: 120px; }
     .map-actions {
       position: absolute;
-      inset: auto 0 0;
+      inset: auto 0 4px;
       z-index: 4;
       min-height: 44px;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 2px;
       touch-action: pan-y pinch-zoom;
     }
+    .map-gesture-hint {
+      visibility: hidden;
+      margin: 0;
+      color: #a8b1ba;
+      font-size: 11px;
+      line-height: 16px;
+    }
+    .hero[data-map-interactive] .map-gesture-hint { visibility: visible; }
     .map-mode, .map-scroll {
       display: inline-flex;
       align-items: center;
@@ -439,8 +434,11 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .map-mode {
       border: 1px solid #ffffff26;
       border-radius: 999px;
-      min-height: 36px;
-      background: #161b22;
+      justify-content: center;
+      min-width: 112px;
+      background: #222b35;
+      color: #eef5fa;
+      font-weight: 600;
       font-family: inherit;
     }
     .map-mode:disabled { opacity: .5; }

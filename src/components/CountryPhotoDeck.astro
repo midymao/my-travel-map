@@ -282,11 +282,18 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
   @media (max-width: 900px) and (orientation: portrait) {
     .country-photo-deck { padding: 38px 12px 0; }
     .deck-country {
-      display: block;
-      margin: 17px 2px 0;
-      color: #d5cfc7;
-      font-size: 13px;
-      letter-spacing: .14em;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0 0;
+      color: #e0d7cb;
+      font: 600 14px/1.5 'Songti SC', 'Noto Serif CJK SC', SimSun, serif;
+      letter-spacing: .12em;
+    }
+    .deck-country::after {
+      content: "";
+      width: 24px;
+      border-top: 1px solid #c1ad9452;
     }
     .deck-photo {
       border-radius: 18px;
