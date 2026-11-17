@@ -353,6 +353,17 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     overflow-y: auto;
     line-height: 1.6;
   }
+  @media (max-width: 760px), (pointer: coarse) {
+    .card {
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      touch-action: pan-y pinch-zoom;
+    }
+    .card-body {
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+  }
   @media (max-height: 650px) {
     .card-media {
       aspect-ratio: auto;
@@ -1198,6 +1209,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       cardLink.setAttribute("href", city.href);
       showCardImage(city.image);
       card.hidden = false;
+      card.scrollTop = 0;
       card.focus({ preventScroll: true });
       detailViewKey = `country:${code}`;
       prepareCountry(c);

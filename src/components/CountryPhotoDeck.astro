@@ -36,7 +36,13 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
           sizes="(max-width: 900px) and (orientation: portrait) calc(100vw - 52px), (max-width: 900px) calc(50vw - 102px), (max-width: 1600px) calc(43vw - 60px), 630px"
           alt="" loading="lazy" decoding="async" width={Math.round(800 * slide.aspectRatio)} height="800"
           style={'object-position:' + (slide.position ?? '50% 50%')} />
-        <span class="photo-caption"><span class="caption-names"><span class="caption-en" lang="en">{slide.titleEn}</span><span class="caption-zh" lang="zh-CN">{slide.title}</span></span><span class="visit-arrow" aria-hidden="true">↗</span></span>
+        <span class="photo-caption">
+          <span class="caption-names">
+            <span class="caption-zh" lang="zh-CN">{slide.title}</span>
+            <span class="caption-en" lang="en">{slide.titleEn}</span>
+          </span>
+          <span class="visit-arrow" aria-hidden="true"></span>
+        </span>
       </a>
     ))}
   </div>
@@ -217,9 +223,36 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
   .deck-photo:focus-visible { outline: 2px solid #d4e3e9; outline-offset: 4px; }
   .photo-caption { position: absolute; inset: 0 0 auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; box-sizing: border-box; padding: 13px 16px 28px; background: linear-gradient(180deg, #05090c99, transparent); color: #fff; text-shadow: 0 1px 7px #0007; opacity: 0; transform: translateY(-4px); transition: opacity .35s ease, transform .5s cubic-bezier(.22,1,.36,1); pointer-events: none; }
   .caption-names { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-  .caption-en { font: italic 17px/1.12 Georgia, 'Times New Roman', serif; letter-spacing: .015em; text-wrap: balance; }
-  .caption-zh { font: 11px/1.5 'Songti SC', 'Noto Serif CJK SC', SimSun, serif; letter-spacing: .2em; }
-  .visit-arrow { display: none; font: 15px/1 Georgia, serif; opacity: .75; margin-bottom: 3px; }
+  .caption-en { font: italic 12px/1.3 Georgia, 'Times New Roman', serif; letter-spacing: .035em; color: #eee5d9; text-wrap: balance; }
+  .caption-zh { font: 700 15px/1.25 'Songti SC', 'Noto Serif CJK SC', SimSun, serif; letter-spacing: .12em; }
+  .visit-arrow {
+    display: none;
+    flex: none;
+    position: relative;
+    width: 18px;
+    height: 18px;
+    margin-bottom: 2px;
+    color: #f5eee1;
+    filter: drop-shadow(0 1px 2px #0009);
+  }
+  .visit-arrow::before, .visit-arrow::after { content: ""; position: absolute; }
+  .visit-arrow::before {
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    border-top: 1px solid currentColor;
+    border-right: 1px solid currentColor;
+  }
+  .visit-arrow::after {
+    top: 2px;
+    right: 2px;
+    width: 1px;
+    height: 17px;
+    background: currentColor;
+    transform: rotate(45deg);
+    transform-origin: top;
+  }
   .is-open .deck-photo { pointer-events: auto; width: 74%; height: calc(111% / var(--ratio)); }
   .is-open .deck-photo.is-portrait { width: 39%; height: calc(58.5% / var(--ratio)); }
   .is-open [data-slot="0"] { left: 0; top: 3%; transform: rotate(-8deg); }
@@ -233,9 +266,9 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
   .is-open .deck-photo:not(.is-front):hover .photo-caption,
   .is-open .deck-photo:focus-visible .photo-caption { opacity: 1; transform: translateY(0); }
   .is-open .is-front .photo-caption { top: auto; bottom: 0; padding: 38px 20px 18px; background: linear-gradient(0deg, #05090cb3, #05090c30 65%, transparent); }
-  .is-open .is-front .caption-en { font-size: clamp(21px, 2vw, 29px); }
-  .is-open .is-front .caption-zh { font-size: 12px; letter-spacing: .25em; }
-  .is-open .is-front .visit-arrow { display: inline; }
+  .is-open .is-front .caption-en { font-size: clamp(12px, 1.05vw, 15px); }
+  .is-open .is-front .caption-zh { font-size: clamp(21px, 2vw, 28px); }
+  .is-open .is-front .visit-arrow { display: block; }
   .is-reordering .deck-photo { transition: none; }
   .deck-status { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   @media (hover: hover) and (pointer: fine) {
@@ -264,11 +297,11 @@ const initialIndex = Math.max(0, slides.findIndex(slide => slide.aspectRatio >= 
     .country-photo-deck:not(.is-open) :is([data-slot="2"], [data-slot="3"]):not(.is-front) { opacity: 0; }
     .photo-caption { padding: 9px 10px 22px; }
     .caption-names { gap: 4px; }
-    .caption-en { font-size: 12px; }
-    .caption-zh { font-size: 9px; letter-spacing: .12em; }
+    .caption-en { font-size: 10px; }
+    .caption-zh { font-size: 13px; }
     .is-open .is-front .photo-caption { padding: 28px 13px 12px; }
-    .is-open .is-front .caption-en { font-size: 20px; }
-    .is-open .is-front .caption-zh { font-size: 10px; }
+    .is-open .is-front .caption-en { font-size: 11px; }
+    .is-open .is-front .caption-zh { font-size: 18px; }
   }
   @media (pointer: coarse) and (prefers-reduced-motion: no-preference) {
     .is-scroll-preview:not(.is-open) [data-slot="0"] { transform: translate(-3%, -5%) rotate(-10deg); }
