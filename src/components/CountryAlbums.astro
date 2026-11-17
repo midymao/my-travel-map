@@ -8,7 +8,7 @@ const rows = Array.from({ length: Math.ceil(albums.length / 2) }, (_, i) => albu
 ---
 
 {albums.length > 0 && <section id="travel-albums" class="travel-albums" data-travel-albums aria-labelledby="travel-albums-title">
-  <h2 id="travel-albums-title" class="albums-divider" lang="en">ALBUMS</h2>
+  <h2 id="travel-albums-title" class="albums-divider" lang="en" tabindex="-1">ALBUMS</h2>
   <div class="album-rows">
     {rows.map(row => (
       <div class="album-row">

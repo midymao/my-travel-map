@@ -100,7 +100,12 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       </button>
       <button type="button" class="map-zoom" data-map-zoom="in" aria-label="放大地图">+</button>
     </div>
-    <a class="map-scroll" href="#travel-albums">浏览图册 <span aria-hidden="true">↓</span></a>
+    <a class="map-scroll" href="#travel-albums-title" aria-label="浏览图册">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 5v13m-5-5 5 5 5-5" />
+      </svg>
+    </a>
   </div>
 
   <div class="dock">
@@ -508,24 +513,27 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     }
     .hero[data-map-interactive] .map-control-row::after {
       opacity: 1;
-      transition: transform .25s cubic-bezier(.22, .65, .32, 1), opacity .2s ease .04s;
+      transition-delay: 0s, .04s;
     }
     .map-control-row[data-zoom-feedback="out"] { --map-highlight-offset: -44px; }
     .map-control-row[data-zoom-feedback="in"] { --map-highlight-offset: 44px; }
+    .map-control-row[data-zoom-dragging]::after {
+      transition-property: opacity;
+    }
     .map-control-row[data-zoom-feedback]::after { animation: map-highlight-stretch .2s ease-out; }
     @keyframes map-highlight-stretch {
       35% { scale: 1.16 .94; }
     }
-    .map-mode, .map-scroll {
-      display: inline-flex;
+    .map-scroll {
+      display: grid;
+      place-items: center;
       align-items: center;
-      gap: 6px;
+      min-width: 44px;
       min-height: 44px;
-      padding-inline: 12px;
-      color: #b6bec8;
-      font-size: 12px;
-      text-decoration: none;
+      border-radius: 50%;
+      color: #b4aba0;
     }
+    .map-scroll:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
     .map-mode, .map-zoom {
       display: inline-flex;
       align-items: center;
@@ -705,6 +713,17 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     const mapMode = root.querySelector<HTMLButtonElement>("[data-map-mode]");
     const mapControlRow = root.querySelector<HTMLElement>(".map-control-row");
     let zoomFeedbackTimer: ReturnType<typeof setTimeout> | undefined;
+    let zoomDrag: { pointerId: number; startX: number; lastX: number; active: boolean } | undefined;
+    let suppressMapClick = false;
+    function endZoomDrag() {
+      const pointerId = zoomDrag?.pointerId;
+      zoomDrag = undefined;
+      mapControlRow?.removeAttribute("data-zoom-dragging");
+      mapControlRow?.style.removeProperty("--map-highlight-offset");
+      if (pointerId !== undefined && mapMode?.hasPointerCapture(pointerId)) {
+        mapMode.releasePointerCapture(pointerId);
+      }
+    }
     function clearZoomFeedback() {
       clearTimeout(zoomFeedbackTimer);
       mapControlRow?.removeAttribute("data-zoom-feedback");
@@ -714,7 +733,10 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       if (!mapMode) return;
       root.toggleAttribute("data-map-interactive", active);
       mapMode.setAttribute("aria-pressed", String(active));
-      if (!active) clearZoomFeedback();
+      if (!active) {
+        endZoomDrag();
+        clearZoomFeedback();
+      }
       if (active && !demonstratedMap && !reduceMotion && performance.now() >= flightUntil) {
         demonstratedMap = true;
         finishIntro();
@@ -725,7 +747,43 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         world.pointOfView({ lat, lng: lng + 7, altitude }, duration);
       }
     }
-    mapMode?.addEventListener("click", () => setMapInteractive(!root.hasAttribute("data-map-interactive")));
+    mapMode?.addEventListener("pointerdown", event => {
+      if (!event.isPrimary || event.button !== 0 || zoomDrag) return;
+      suppressMapClick = false;
+      if (!root.hasAttribute("data-map-interactive")) return;
+      zoomDrag = { pointerId: event.pointerId, startX: event.clientX, lastX: event.clientX, active: false };
+      mapMode.setPointerCapture(event.pointerId);
+    });
+    mapMode?.addEventListener("pointermove", event => {
+      if (!zoomDrag || event.pointerId !== zoomDrag.pointerId || !mapControlRow) return;
+      const offset = event.clientX - zoomDrag.startX;
+      if (!zoomDrag.active) {
+        if (Math.abs(offset) < 6) return;
+        zoomDrag.active = true;
+        suppressMapClick = true;
+        clearZoomFeedback();
+        mapControlRow.setAttribute("data-zoom-dragging", "");
+      }
+      const buttonWidth = mapMode.offsetWidth;
+      const delta = event.clientX - zoomDrag.lastX;
+      zoomDrag.lastX = event.clientX;
+      if (!buttonWidth) return;
+      const highlightOffset = Math.max(-buttonWidth, Math.min(buttonWidth, offset));
+      mapControlRow.style.setProperty("--map-highlight-offset", `${highlightOffset}px`);
+      zoomBy(-delta * zoomStep / buttonWidth, "drag");
+    });
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"] as const) {
+      mapMode?.addEventListener(type, event => {
+        if (event.pointerId === zoomDrag?.pointerId) endZoomDrag();
+      });
+    }
+    mapMode?.addEventListener("click", event => {
+      if (suppressMapClick && event.detail > 0) {
+        suppressMapClick = false;
+        return;
+      }
+      setMapInteractive(!root.hasAttribute("data-map-interactive"));
+    });
     root.querySelectorAll<HTMLButtonElement>("[data-map-zoom]").forEach(button => {
       button.addEventListener("click", () => {
         if (root.hasAttribute("data-map-interactive")) {
@@ -1086,7 +1144,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     const maxWheelLead = 0.65;
     const wheelNotch = 120;
     const zoomStep = wheelNotch * 0.0027;
-    type ZoomInput = "wheel" | "pinch" | "button";
+    type ZoomInput = "wheel" | "pinch" | "button" | "drag";
     let zoomInput: ZoomInput = "wheel";
     let wheelVelocity = 0;
     let wheelTail = 0;
@@ -1110,7 +1168,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       const current = Math.log(altNow());
       const offset = current - targetLogAltitude;
       let next: number;
-      if (zoomInput !== "pinch") {
+      if (zoomInput === "wheel" || zoomInput === "button") {
         // Keep velocity between wheel events so a burst reads as one movement.
         const decay = Math.exp(-wheelResponse * elapsed);
         const drift = wheelVelocity + wheelResponse * offset;
@@ -1162,7 +1220,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       const previousTarget = continuing ? targetLogAltitude - wheelTail : current;
       const floor = Math.log(zoomFloor);
       const ceiling = Math.log(overviewMaxDistance / 100 - 1);
-      const stepped = input !== "pinch";
+      const stepped = input === "wheel" || input === "button";
       const clampTarget = (value: number) => {
         const paced = stepped
           ? current + Math.max(-maxWheelLead, Math.min(maxWheelLead, value - current))
