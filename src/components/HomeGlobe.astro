@@ -87,19 +87,15 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   </p>
   <div class="map-actions">
     <div class="map-control-row">
-    <button type="button" class="map-zoom" data-map-zoom="out" aria-label="缩小地图">−</button>
-    <button type="button" class="map-mode" data-map-mode aria-label="操作地球" aria-pressed="false" disabled>
-      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" />
-        <ellipse cx="12" cy="12" rx="4" ry="9" />
-        <path d="M3 12h18" />
-        <g class="map-mode-check">
-          <circle cx="18.5" cy="18.5" r="5" fill="#122030" stroke="#c4e0f4" />
-          <path d="m16.5 18.5 1.3 1.3 2.6-2.6" stroke="#eef5fa" stroke-linecap="round" stroke-linejoin="round" />
-        </g>
-      </svg>
-    </button>
-    <button type="button" class="map-zoom" data-map-zoom="in" aria-label="放大地图">+</button>
+      <button type="button" class="map-zoom" data-map-zoom="out" aria-label="缩小地图">−</button>
+      <button type="button" class="map-mode" data-map-mode aria-label="操作地球" aria-pressed="false" disabled>
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <ellipse cx="12" cy="12" rx="4" ry="9" />
+          <path d="M3 12h18" />
+        </svg>
+      </button>
+      <button type="button" class="map-zoom" data-map-zoom="in" aria-label="放大地图">+</button>
     </div>
     <a class="map-scroll" href="#travel-albums">浏览图册 <span aria-hidden="true">↓</span></a>
   </div>
@@ -466,10 +462,48 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       touch-action: pan-y pinch-zoom;
     }
     .map-control-row {
+      position: relative;
+      isolation: isolate;
       display: flex;
       align-items: center;
-      gap: 8px;
+      padding-inline: 4px;
     }
+    .map-control-row::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: 0 auto 0 50%;
+      width: 44px;
+      box-sizing: border-box;
+      transform: translateX(-50%);
+      border: 1px solid #ffffff26;
+      border-radius: 999px;
+      background: #161c24;
+      transition: width .44s cubic-bezier(.2, .85, .24, 1), border-color .25s ease;
+    }
+    .hero[data-map-interactive] .map-control-row::before {
+      width: 100%;
+      border-color: #9cc4de88;
+    }
+    .map-control-row::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      top: 4px;
+      left: 50%;
+      width: 44px;
+      height: 36px;
+      border-radius: 999px;
+      background: #a9d5fb38;
+      box-shadow: inset 0 0 0 1px #c4e0f42e;
+      opacity: 0;
+      transform: translateX(calc(-50% + var(--map-highlight-offset, 0px)));
+      transition: transform .19s cubic-bezier(.2, .8, .3, 1), opacity .2s ease;
+      pointer-events: none;
+    }
+    .hero[data-map-interactive] .map-control-row::after { opacity: 1; }
+    .map-control-row[data-zoom-feedback="out"] { --map-highlight-offset: -44px; }
+    .map-control-row[data-zoom-feedback="in"] { --map-highlight-offset: 44px; }
     .map-mode, .map-scroll {
       display: inline-flex;
       align-items: center;
@@ -481,27 +515,37 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       text-decoration: none;
     }
     .map-mode, .map-zoom {
-      border: 1px solid #ffffff26;
+      display: inline-flex;
+      align-items: center;
+      border: 0;
       border-radius: 999px;
       justify-content: center;
       width: 44px;
       height: 44px;
       padding: 0;
-      background: #161c24;
+      background: transparent;
       color: #b6bec8;
       transition: color .2s ease, background-color .2s ease, border-color .2s ease;
     }
-    .map-zoom { visibility: hidden; font: 500 21px/1 system-ui, sans-serif; }
-    .hero[data-map-interactive] .map-zoom { visibility: visible; }
-    .map-zoom:active { background: #263649; }
-    .map-mode:disabled { opacity: .5; }
-    .map-mode-check { visibility: hidden; }
-    .map-mode[aria-pressed="true"] .map-mode-check { visibility: visible; }
-    .map-mode[aria-pressed="true"] {
-      color: #122030;
-      background: #c4e0f4;
-      border-color: #9cc4de88;
+    .map-zoom {
+      visibility: hidden;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateX(var(--zoom-offset));
+      font: 500 21px/1 system-ui, sans-serif;
+      transition: transform .36s cubic-bezier(.2, .85, .24, 1), opacity .18s ease, visibility 0s .18s;
     }
+    .map-zoom[data-map-zoom="out"] { --zoom-offset: 12px; }
+    .map-zoom[data-map-zoom="in"] { --zoom-offset: -12px; }
+    .hero[data-map-interactive] .map-zoom {
+      visibility: visible;
+      pointer-events: auto;
+      opacity: 1;
+      transform: none;
+      transition-delay: .04s, .09s, 0s;
+    }
+    .map-mode:disabled { opacity: .5; }
+    .map-mode[aria-pressed="true"] { color: #c4e0f4; }
     :is(.map-mode, .map-zoom):focus-visible { outline: 2px solid #c4e0f4; outline-offset: 3px; }
   }
   @media (pointer: coarse) and (orientation: portrait) and (max-width: 760px) {
@@ -512,7 +556,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .country-nav-button, .country-code, .country-dot { transition: none; }
     .country-nav-button:is(:hover, :focus-visible, :active) { transform: none; }
     .country-tooltip { animation: none; }
-    .map-mode { transition: none; }
+    .map-mode, .map-zoom, .map-control-row::before, .map-control-row::after { transition: none; }
   }
 </style>
 
@@ -638,11 +682,18 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   async function init() {
     const el = root.querySelector("[data-globe-canvas]");
     const mapMode = root.querySelector<HTMLButtonElement>("[data-map-mode]");
+    const mapControlRow = root.querySelector<HTMLElement>(".map-control-row");
+    let zoomFeedbackTimer: ReturnType<typeof setTimeout> | undefined;
+    function clearZoomFeedback() {
+      clearTimeout(zoomFeedbackTimer);
+      mapControlRow?.removeAttribute("data-zoom-feedback");
+    }
     let demonstratedMap = false;
     function setMapInteractive(active: boolean) {
       if (!mapMode) return;
       root.toggleAttribute("data-map-interactive", active);
       mapMode.setAttribute("aria-pressed", String(active));
+      if (!active) clearZoomFeedback();
       if (active && !demonstratedMap && !reduceMotion && performance.now() >= flightUntil) {
         demonstratedMap = true;
         finishIntro();
@@ -657,6 +708,11 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     root.querySelectorAll<HTMLButtonElement>("[data-map-zoom]").forEach(button => {
       button.addEventListener("click", () => {
         if (root.hasAttribute("data-map-interactive")) {
+          if (mapControlRow) {
+            clearTimeout(zoomFeedbackTimer);
+            mapControlRow.dataset.zoomFeedback = button.dataset.mapZoom;
+            zoomFeedbackTimer = setTimeout(clearZoomFeedback, 190);
+          }
           zoomBy(button.dataset.mapZoom === "in" ? -0.24 : 0.24, "button");
         }
       });
