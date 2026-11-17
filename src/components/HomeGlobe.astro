@@ -74,9 +74,12 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   </nav>
   <button type="button" class="country-drawer-toggle" data-country-drawer-toggle disabled
     aria-controls="globe-country-navigation" aria-expanded="false" aria-label="展开国家导航">
-    <span class="country-drawer-label">国家</span>
-    <svg width="16" height="24" viewBox="0 0 16 24" fill="none" aria-hidden="true">
+    <svg class="country-drawer-chevron" width="16" height="24" viewBox="0 0 16 24" fill="none" aria-hidden="true">
       <path d="m5 6 6 6-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <svg class="country-drawer-pin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+      <path d="M19 10c0 4.5-7 10-7 10S5 14.5 5 10a7 7 0 1 1 14 0Z" />
+      <circle cx="12" cy="10" r="2.3" />
     </svg>
   </button>
   </aside>
@@ -201,9 +204,9 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     color: #fff; background: rgba(32, 38, 46, .8); border-color: rgba(216, 225, 235, .4);
   }
   .country-drawer-toggle:focus-visible { outline: 1px solid #a7bacb; outline-offset: 3px; }
-  .country-drawer-toggle svg { transition: transform .4s ease; }
-  .country-drawer-label { display: none; }
-  .country-drawer.is-open .country-drawer-toggle svg { transform: rotate(180deg); }
+  .country-drawer-chevron { transition: transform .4s ease; }
+  .country-drawer-pin { display: none; }
+  .country-drawer.is-open .country-drawer-chevron { transform: rotate(180deg); }
   .overlay h1 {
     margin: 0;
     font-size: clamp(1.45rem, 2.25vw, 2rem);
@@ -229,11 +232,17 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     padding: 18px;
     border: 1px solid rgba(216, 225, 235, .15); border-left: 0;
     border-radius: 0 16px 16px 0;
-    background: rgba(10, 14, 19, .82);
-    backdrop-filter: blur(24px) saturate(.8);
+    background: rgba(10, 14, 19, .9);
     box-shadow: 12px 12px 36px rgba(0, 0, 0, .15);
     opacity: 0; visibility: hidden;
     transition: opacity .3s ease, visibility 0s linear .48s;
+  }
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .country-navigation {
+      background: rgba(10, 14, 19, .60);
+      -webkit-backdrop-filter: blur(16px) saturate(.85);
+      backdrop-filter: blur(16px) saturate(.85);
+    }
   }
   .country-drawer.is-open .country-navigation {
     opacity: 1; visibility: visible; pointer-events: auto;
@@ -421,17 +430,18 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .country-drawer.is-open { transform: none; }
     .country-drawer-toggle {
       flex: 0 0 auto;
-      width: auto;
+      width: 60px;
       height: 44px;
-      padding-inline: 14px;
+      display: flex;
+      justify-content: center;
+      gap: 2px;
       border: 1px solid rgba(216, 225, 235, .2);
       border-radius: 999px;
-      font: inherit;
-      font-size: 12px;
       touch-action: pan-y;
     }
-    .country-drawer-toggle svg { display: none; }
-    .country-drawer-label { display: inline; }
+    .country-drawer-pin { display: block; order: -1; }
+    .country-drawer-chevron { width: 12px; transform: rotate(-90deg); }
+    .country-drawer.is-open .country-drawer-chevron { transform: rotate(90deg); }
     .country-navigation {
       position: absolute;
       inset: auto 0 calc(100% + 8px);
@@ -439,7 +449,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       padding: 12px;
       border: 1px solid rgba(216, 225, 235, .15);
       border-radius: 16px;
-      background: rgba(10, 14, 19, .94);
       touch-action: pan-y;
       transform: translateY(14px);
       transition: transform .28s ease, opacity .22s ease, visibility 0s linear .28s;
@@ -621,7 +630,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   const countryDrawer = root?.querySelector<HTMLElement>("[data-country-drawer]");
   const drawerToggle = root?.querySelector<HTMLButtonElement>("[data-country-drawer-toggle]");
   const drawerNavigation = root?.querySelector<HTMLElement>("#globe-country-navigation");
-  const drawerLabel = drawerToggle?.querySelector(".country-drawer-label");
   function setCountryDrawer(open: boolean) {
     if (!countryDrawer || !drawerToggle || !drawerNavigation) return;
     if (open && drawerToggle.disabled) return;
@@ -633,7 +641,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     drawerNavigation.inert = !open;
     drawerToggle.setAttribute("aria-expanded", String(open));
     drawerToggle.setAttribute("aria-label", open ? "收起国家导航" : "展开国家导航");
-    if (drawerLabel) drawerLabel.textContent = open ? "收起" : "国家";
   }
   drawerToggle?.addEventListener("pointerenter", event => {
     if (event.pointerType === "mouse") setCountryDrawer(true);
