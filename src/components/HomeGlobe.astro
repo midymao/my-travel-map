@@ -348,12 +348,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     padding: 0;
   }
   .chip.back:focus-visible { outline: 2px solid #c4e0f4; outline-offset: 2px; }
-  .city-row .city {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 44' preserveAspectRatio='none'%3E%3Cpath fill='%23ded4c2' d='M5 0H226C231 7 224 13 232 20S241 32 230 44H12C17 36 3 30 7 22S17 9 5 0Z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-size: calc(100% + 48px) 100%;
-    background-position: -24px calc(100% + 100px);
-  }
   @media (hover: hover) and (pointer: fine) {
     .city-row .city {
       transition: background-color .18s ease, border-color .18s ease, color .18s ease;
@@ -362,7 +356,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .city-row .city:focus-visible { outline: 2px solid #c4e0f4; outline-offset: 2px; }
   }
   .city-row .city.active {
-    background-position: -24px 0;
+    background-color: #ded4c2;
     border-color: #ded4c2;
     color: #171a20;
   }
@@ -1659,28 +1653,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         const active = b.dataset.country === code && b.dataset.city === id;
         b.classList.toggle("active", active); b.setAttribute("aria-pressed", String(active));
       });
-      const nextButton = root.querySelector<HTMLButtonElement>("[data-city].active");
-      if (!reduceMotion && previousButton && nextButton && previousButton !== nextButton
-        && previousButton.dataset.country === nextButton.dataset.country) {
-        const previousLeft = previousButton.getBoundingClientRect().left;
-        const nextLeft = nextButton.getBoundingClientRect().left;
-        const nextIsAfter = Boolean(previousButton.compareDocumentPosition(nextButton) & Node.DOCUMENT_POSITION_FOLLOWING);
-        const toRight = nextLeft === previousLeft ? nextIsAfter : nextLeft > previousLeft;
-        const animateHighlight = (button: HTMLButtonElement, from: string, to: string) => {
-          button.getAnimations().forEach(animation => {
-            if (animation.id === "city-highlight") animation.cancel();
-          });
-          const motion = button.animate([{ backgroundPosition: from }, { backgroundPosition: to }], {
-            duration: 260, easing: "cubic-bezier(.25,.65,.3,1)",
-          });
-          motion.id = "city-highlight";
-        };
-        const filled = "-24px 0";
-        const offset = (button: HTMLButtonElement, direction: number) =>
-          `${-24 + direction * (button.offsetWidth + 24)}px 0`;
-        animateHighlight(previousButton, filled, offset(previousButton, toRight ? 1 : -1));
-        animateHighlight(nextButton, offset(nextButton, toRight ? -1 : 1), filled);
-      }
       cardTitle.textContent = city.title;
       cardMeta.textContent = [c.name, city.date].filter(Boolean).join(" · ");
       cardSummary.textContent = city.summary;
