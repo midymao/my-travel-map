@@ -366,6 +366,14 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     height: 100%;
     object-fit: var(--card-image-fit, cover);
   }
+  .card-media { overflow: hidden; }
+  .card-media img[data-preview] { filter: blur(9px); transform: scale(1.06); }
+  @media (prefers-reduced-motion: no-preference) {
+    .card-media img[data-photo-ready] { animation: city-photo-in .22s ease-out; }
+    @keyframes city-photo-in {
+      from { filter: blur(3px); }
+    }
+  }
   .card-body {
     min-height: 0;
     padding: 1rem 1.2rem;
@@ -499,7 +507,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     }
     .dock:has(.card:not([hidden])) .city-row { visibility: hidden; }
     .card {
-      --mobile-card-photo-height: min(252px, calc((100vw - 26px) * .625), 42svh);
+      --mobile-card-photo-height: min(252px, calc((100vw - 26px) * .5625), 42svh);
       position: absolute;
       bottom: 0;
       width: min(100%, 28rem);
@@ -514,7 +522,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       aspect-ratio: auto;
       background: #080c12;
     }
-    .card-media img { object-fit: contain; }
+    .card-media img { object-fit: cover; }
     .card-body { padding-block-start: .75rem; }
     .card h3 { line-height: 1.75rem; }
     .card .meta {
@@ -660,6 +668,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
 <script>
   import Globe from "globe.gl";
+  import cityCardPreviews from "../data/cityCardPreviews.json";
   import { ImageLoader, TextureLoader, TOUCH, Vector3 } from "three";
   import { SurfaceTiles } from "./SurfaceTiles";
   import { TileViewCache } from "./TileViewCache";
@@ -681,6 +690,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
   const root = document.querySelector("[data-globe-root]");
   const albumRoot = document.querySelector("[data-travel-albums]");
+  const albumDecks = [...(albumRoot?.querySelectorAll("[data-country-photo-deck]") ?? [])];
+  function prepareAlbum(deck: Element) {
+    return Promise.allSettled([...deck.querySelectorAll("img")].map(img => {
+      img.loading = "eager";
+      return img.decode();
+    }));
+  }
   const countryTooltip = root?.querySelector<HTMLElement>("[role=tooltip]");
   let tooltipButton: HTMLButtonElement | null = null;
   function hideCountryTooltip() {
@@ -776,6 +792,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   retryButton?.addEventListener("click", () => location.reload());
 
   async function init() {
+    const firstAlbums = Promise.all(albumDecks.slice(0, 2).map(prepareAlbum));
     const el = root.querySelector("[data-globe-canvas]");
     const mapMode = root.querySelector<HTMLButtonElement>("[data-map-mode]");
     const mapControlRow = root.querySelector<HTMLElement>(".map-control-row");
@@ -1488,6 +1505,9 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     function showCountry(code) {
       const c = countries.find((x) => x.code === code);
       if (!c) return;
+      for (const city of c.cities) {
+        if (city.image) void prepareCardPhoto(cardPhotoUrl(city.image.src)).catch(() => {});
+      }
       if (coarse) setCountryDrawer(false);
       selectedCode = code;
       hideCityUi();
@@ -1501,25 +1521,53 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     }
 
     let imageRequest = 0;
+    const cardPhotoRequests = new Map<string, Promise<string>>();
+    function cardPhotoUrl(source: string) {
+      return source.replace("/images/places/", "/images/places/_cards/").replace(/\.[^./]+$/, ".webp");
+    }
+    function prepareCardPhoto(src: string) {
+      const pending = cardPhotoRequests.get(src);
+      if (pending) return pending;
+      const photo = new Image();
+      photo.src = src;
+      const ready = photo.decode().then(() => src).catch(error => {
+        cardPhotoRequests.delete(src);
+        throw error;
+      });
+      cardPhotoRequests.set(src, ready);
+      return ready;
+    }
     function showCardImage(image) {
       const request = ++imageRequest;
       cardImage.hidden = true;
       cardImage.removeAttribute("src");
+      cardImage.removeAttribute("data-preview");
+      cardImage.removeAttribute("data-photo-ready");
       cardMedia.hidden = !image;
       if (!image) return;
       cardImage.alt = image.alt;
       cardImage.style.objectPosition = image.position;
       cardImage.style.setProperty("--card-image-fit", image.fit ?? "cover");
-      cardImage.onerror = () => {
-        if (request !== imageRequest) return;
-        if (cardImage.getAttribute("src") !== image.src) {
-          cardImage.src = image.src;
-        } else {
-          cardMedia.hidden = true;
-        }
-      };
-      cardImage.src = image.src.replace("/images/places/", "/images/places/_cards/").replace(/\.[^./]+$/, ".webp");
-      cardImage.hidden = false;
+      const src = cardPhotoUrl(image.src);
+      const filename = decodeURIComponent(src.slice(src.lastIndexOf("/") + 1));
+      const preview = cityCardPreviews[filename];
+      if (preview) {
+        cardImage.setAttribute("data-preview", "");
+        cardImage.src = preview;
+        cardImage.hidden = false;
+      }
+      prepareCardPhoto(src)
+        .catch(() => request === imageRequest ? prepareCardPhoto(image.src) : undefined)
+        .then(readySrc => {
+          if (!readySrc || request !== imageRequest) return;
+          cardImage.src = readySrc;
+          cardImage.removeAttribute("data-preview");
+          cardImage.setAttribute("data-photo-ready", "");
+          cardImage.hidden = false;
+        })
+        .catch(() => {
+          if (request === imageRequest && !preview) cardMedia.hidden = true;
+        });
     }
 
     function showCity(code, id) {
@@ -1666,6 +1714,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       if (entered) return;
       useGlobeSpherePicking(globeScene, material, world.getGlobeRadius());
       entered = true;
+      void (async () => {
+        if (navigator.connection?.saveData) return;
+        for (const deck of albumDecks.slice(2)) {
+          if (!await waitForPreloadIdle(backgroundAbort.signal, pauseBackground)) return;
+          await prepareAlbum(deck);
+        }
+      })();
       tileSourceReady = true;
       controls.enabled = true;
       controls.autoRotate = false;
@@ -1722,6 +1777,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         console.info("[globe] Background imagery preload paused", err);
       }
     }
+
+    let albumTimer: ReturnType<typeof setTimeout>;
+    loadStage("Preparing the first photo albums…");
+    await Promise.race([
+      firstAlbums,
+      new Promise<void>(resolve => { albumTimer = setTimeout(resolve, 900); }),
+    ]).finally(() => clearTimeout(albumTimer));
 
     // Let the mobile renderer draw normally without a separate shader warmup.
     if (coarse) {
