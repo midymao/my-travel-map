@@ -491,7 +491,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       touch-action: pan-y pinch-zoom;
     }
     .note { display: none; }
-    .dock { inset: auto 12px 102px; }
+    .dock { inset: auto 12px 60px; }
     .drawer-country-name:not(:empty) {
       display: block;
       min-width: 0;
@@ -552,20 +552,20 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .card [data-card-summary] { line-height: 1.5rem; }
     .map-actions {
       position: absolute;
-      inset: auto 0 4px;
+      inset: auto 0 8px;
       z-index: 4;
       min-height: 44px;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 2px;
+      pointer-events: none;
       touch-action: pan-y pinch-zoom;
     }
     .map-control-row {
       --map-control-ease: cubic-bezier(.22, .78, .24, 1);
       --map-control-duration: .32s;
-      position: relative;
+      position: absolute;
+      right: 8px;
       isolation: isolate;
       display: flex;
       align-items: center;
@@ -620,6 +620,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       min-height: 44px;
       border-radius: 50%;
       color: #b4aba0;
+      pointer-events: auto;
     }
     .map-scroll:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
     .map-mode, .map-zoom {
@@ -635,6 +636,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       color: #b6bec8;
       transition: color .2s ease, background-color .2s ease, border-color .2s ease;
     }
+    .map-mode { pointer-events: auto; }
     .map-zoom {
       visibility: hidden;
       pointer-events: none;
@@ -656,6 +658,9 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     .map-mode { color: #e0d6c6; }
     .map-mode[aria-pressed="true"] { color: #fff2db; }
     :is(.map-mode, .map-zoom):focus-visible { outline: 2px solid #c4e0f4; outline-offset: 3px; }
+  }
+  @media (pointer: coarse) and (max-width: 350px) {
+    .hero[data-map-interactive] .map-scroll { transform: translateX(-14px); }
   }
   @media (pointer: coarse) and (orientation: portrait) and (max-width: 760px) {
     .hero { min-height: 0; }
