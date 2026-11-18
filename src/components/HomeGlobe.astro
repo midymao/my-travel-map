@@ -41,7 +41,6 @@ for (const entry of countryOnlyEntries) {
   });
 }
 const countries = [...groups.values()];
-const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 ---
 
 <section
@@ -54,7 +53,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
 
   <header class="overlay">
     <h1>Midy's Travel Map</h1>
-    <p class="stats">{countries.length} 个国家 · {cityCount} 个城市</p>
   </header>
   <aside class="country-drawer" data-country-drawer aria-label="国家导航">
   <nav class="country-navigation" id="globe-country-navigation" aria-label="去过的国家" inert>
@@ -224,12 +222,6 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     font-size: clamp(1.45rem, 2.25vw, 2rem);
     font-weight: 600;
     letter-spacing: 0.02em;
-  }
-  .stats {
-    margin: 0.4rem 0 0;
-    opacity: 0.6;
-    font-size: 0.9rem;
-    letter-spacing: 0.06em;
   }
   .country-navigation {
     box-sizing: border-box;
