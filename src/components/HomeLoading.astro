@@ -22,10 +22,8 @@ const { residence = false } = Astro.props;
 <script is:inline>
   const residenceLoader = document.currentScript?.previousElementSibling;
   const isResidence = residenceLoader?.hasAttribute("data-residence-loading");
-  if (isResidence || !window.matchMedia("(pointer: coarse)").matches) {
-    document.documentElement.dataset.homeLoadingActive = "true";
-    document.querySelector(".site-header")?.setAttribute("inert", "");
-  }
+  document.documentElement.dataset.homeLoadingActive = "true";
+  document.querySelector(".site-header")?.setAttribute("inert", "");
   if (isResidence) residenceLoader.hidden = false;
 </script>
 {!residence && <noscript><style>.home-loading { display: none !important; }</style><p>Please enable JavaScript to view the interactive map.</p></noscript>}
@@ -33,7 +31,6 @@ const { residence = false } = Astro.props;
   :global(html[data-home-loading-active="true"]) { overflow: hidden; }
   .home-loading { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #050505; color: #e5e9ed; }
   .home-loading[hidden], button[hidden] { display: none; }
-  @media (pointer: coarse) { .home-loading[data-home-loading] { display: none; } }
   .loading-content { width: min(320px, calc(100vw - 48px)); text-align: center; }
   svg { width: 80px; height: 80px; margin-bottom: 20px; }
   .orbit { transform-origin: center; animation: orbit 6s linear infinite; will-change: transform; }
