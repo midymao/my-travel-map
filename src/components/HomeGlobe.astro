@@ -81,7 +81,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       <path d="M19 10c0 4.5-7 10-7 10S5 14.5 5 10a7 7 0 1 1 14 0Z" />
       <circle cx="12" cy="10" r="2.3" />
     </svg>
-    <span class="drawer-country-name" data-drawer-country></span>
+    <span class="drawer-country-name" data-drawer-country aria-hidden="true"></span>
   </button>
   </aside>
   <div class="country-tooltip" id="country-name-tooltip" role="tooltip" lang="en" hidden></div>
@@ -113,8 +113,12 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
   </div>
 
   <div class="dock">
-    <button type="button" class="chip back country-reset" data-country-reset data-reset hidden>
-      ← 全景
+    <button type="button" class="chip back country-reset" data-country-reset data-reset hidden
+      aria-label="返回地球全景" title="返回地球全景">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
+        <circle cx="12" cy="12" r="5" />
+      </svg>
     </button>
     <div class="card" data-card tabindex="-1" role="region" aria-labelledby="globe-city-title" hidden>
       <div class="card-media" data-card-media hidden>
@@ -129,7 +133,14 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     </div>
     {countries.filter(country => country.cities.length).map(country => (
       <ul class="city-row" data-cities-of={country.code} aria-label={`${country.name}城市导航`} hidden>
-        <li><button type="button" class="chip back" data-reset>← 全景</button></li>
+        <li>
+          <button type="button" class="chip back" data-reset aria-label="返回地球全景" title="返回地球全景">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
+              <circle cx="12" cy="12" r="5" />
+            </svg>
+          </button>
+        </li>
         {country.cities.map(city => (
           <li><button type="button" class="chip city" data-country={country.code} data-city={city.id}
             aria-pressed="false">{city.title}</button></li>
@@ -330,8 +341,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     color: #fff;
   }
   .chip.back {
-    opacity: 0.8;
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
   }
+  .chip.back:focus-visible { outline: 2px solid #c4e0f4; outline-offset: 2px; }
   .card {
     width: min(100%, 28rem);
     min-height: 0;
@@ -505,11 +521,10 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       border-color: #ded4c2;
       color: #171a20;
     }
-    .dock:has(.card:not([hidden])) .city-row { visibility: hidden; }
     .card {
       --mobile-card-photo-height: min(252px, calc((100vw - 26px) * .5625), 42svh);
       position: absolute;
-      bottom: 0;
+      bottom: calc(100% + 8px);
       width: min(100%, 28rem);
       max-height: min(55svh, 380px);
       animation: city-card-in .24s cubic-bezier(.22, .78, .24, 1) both;
@@ -1470,7 +1485,9 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
     }
     function syncChips() {
       const selected = countries.find((c) => c.code === selectedCode);
-      root.querySelector("[data-drawer-country]").textContent = selected?.name ?? "";
+      root.querySelector("[data-drawer-country]").textContent = selected?.code ?? "";
+      if (selected) drawerToggle?.setAttribute("aria-description", `当前国家：${selected.name}`);
+      else drawerToggle?.removeAttribute("aria-description");
       root.querySelector("[data-country-reset]").hidden =
         !selected || selected.cities.length > 0;
       root.querySelectorAll("[data-cities-of]").forEach(section => {
@@ -1497,9 +1514,12 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       }
     }
     document.addEventListener("click", event => {
-      if (coarse && !card.hidden && !event.composedPath().includes(card)) {
-        closeCityCard(card.contains(document.activeElement));
-      }
+      if (!coarse || card.hidden || event.composedPath().includes(card)) return;
+      const cityButton = event.target instanceof Element
+        ? event.target.closest<HTMLButtonElement>(".city-row [data-city]")
+        : null;
+      if (cityButton && root.contains(cityButton) && cityButton.dataset.country === selectedCode) return;
+      closeCityCard(card.contains(document.activeElement));
     }, { capture: true });
 
     function showCountry(code) {
@@ -1575,12 +1595,13 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
       const city = c?.cities.find((x) => x.id === id);
       if (!city) return;
       const keepCountryView = coarse && selectedCode === code;
+      const switchingCard = keepCountryView && !card.hidden;
       selectedCode = code;
       syncChips();
       applyPolygonStyle();
       stopRotation();
       root.querySelectorAll("[data-city]").forEach(b => {
-        const active = b.dataset.city === id;
+        const active = b.dataset.country === code && b.dataset.city === id;
         b.classList.toggle("active", active); b.setAttribute("aria-pressed", String(active));
       });
       cardTitle.textContent = city.title;
@@ -1596,7 +1617,7 @@ const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
         prepareCountry(c);
         flyTo(viewFor(c));
       }
-      root.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      if (!switchingCard) root.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
     }
 
     function showOverview() {
