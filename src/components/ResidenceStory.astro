@@ -34,7 +34,7 @@ const { page } = Astro.props;
     </div>
   </section>
 
-  <aside class:list={['quotation', { 'quotation-sichuan': page.quotationArt === 'sichuan', 'quotation-image': !!page.quotationBackground }]}
+  <aside class:list={['quotation', { 'quotation-sichuan': page.quotationArt === 'sichuan', 'quotation-henan': page.quotationArt === 'henan', 'quotation-image': !!page.quotationBackground }]}
     style={page.quotationBackground ? `--quotation-background:url('${page.quotationBackground}')` : undefined} aria-label="引言">
     <span class="quote-paper" aria-hidden="true"></span>
     <div class="quote-inner content-width">
@@ -298,6 +298,19 @@ const { page } = Astro.props;
     .intro-copy { font-size: 17px; }
     .quote-inner { align-items: flex-start; flex-direction: column; gap: 18px; padding-block: 30px; }
     .quote-credit { font-size: 10px; }
+    .quotation-henan .quote-paper { background-image: none; }
+    .quotation-henan .quote-paper::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: var(--quotation-background);
+      background-size: 960px auto;
+      background-position: center top;
+      background-repeat: repeat;
+      filter: contrast(1.6);
+      mask-image: linear-gradient(to bottom, #000 0 26px, transparent 60px, transparent calc(100% - 60px), #000 calc(100% - 26px));
+    }
+    .quotation-henan .quote-inner { padding-block: 60px; }
     .quotation-sichuan .quote-inner { padding-block: 38px; align-items: center; gap: 20px; min-height: 210px; }
     .quotation-sichuan.quotation-image .quote-inner {
       min-height: 0;

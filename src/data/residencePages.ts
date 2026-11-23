@@ -3,7 +3,7 @@ export interface ResidencePage {
   title: string;
   titleLines: string[];
   subtitle: string;
-  quotationArt?: 'sichuan';
+  quotationArt?: 'sichuan' | 'henan';
   quotationBackground?: string;
   heroImage: {
     imageBase: string; alt: string; position?: string;
@@ -72,6 +72,7 @@ export const henanProvincePage: ResidencePage = {
   title: 'Henan Province',
   titleLines: ['Henan', 'Province'],
   subtitle: '河南省',
+  quotationArt: 'henan',
   heroImage: {
     imageBase: '/images/residences/henan-hero',
     alt: '河南麦田中的劳作人群、林带与远处山脉',
