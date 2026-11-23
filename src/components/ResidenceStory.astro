@@ -54,10 +54,11 @@ const { page } = Astro.props;
     <p class="section-label" lang="en">The journal</p>
     <div class="journal-copy">
       {page.sections.map((section, index) => (
-        <section class="journal-section" aria-labelledby={`journal-section-${index}`}>
-          <span class="section-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+        <section class:list={['journal-section', { 'has-subtitle': !!section.subtitle }]} aria-labelledby={`journal-section-${index}`}>
+          {page.sections.length > 1 && <span class="section-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>}
           <h2 id={`journal-section-${index}`}>{section.title}</h2>
-          {section.paragraphs.map(paragraph => <p>{paragraph}</p>)}
+          {section.subtitle && <p class="journal-subtitle">{section.subtitle}</p>}
+          {section.paragraphs.map(paragraph => <p class:list={{ 'section-break': section.breakAfter?.some(ending => paragraph.endsWith(ending)) }}>{paragraph}</p>)}
         </section>
       ))}
     </div>
@@ -269,6 +270,9 @@ const { page } = Astro.props;
   .section-number { display: block; margin-bottom: 16px; color: #777d76; }
   h2 { margin: 0 0 28px; font-family: 'Songti SC', STSong, SimSun, serif; font-weight: 400; font-size: clamp(24px, 2.5vw, 34px); line-height: 1.5; letter-spacing: .12em; }
   .journal-section > p { margin: 0 0 24px; font-size: 16px; line-height: 2.1; letter-spacing: .03em; color: #a8ada6; }
+  .journal-section.has-subtitle h2 { margin-bottom: 18px; font-size: clamp(36px, 4vw, 48px); }
+  .journal-section > .journal-subtitle { margin-bottom: 44px; font-size: clamp(16px, 1.5vw, 18px); color: #c0c3be; }
+  .journal-section > .section-break { margin-bottom: calc(24px + 2.1em); }
   @media (min-width: 1600px) { .hero-image { right: calc((100vw - 1600px) / 2); } }
   @media (max-width: 760px) {
     .residence-hero { min-height: 470px; }

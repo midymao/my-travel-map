@@ -12,7 +12,7 @@ export interface ResidencePage {
   } | null;
   introduction: string[];
   quotation: { text: string; author: string; work: string; source: string; language?: 'en' | 'zh-CN' } | null;
-  sections: { title: string; paragraphs: string[] }[];
+  sections: { title: string; subtitle?: string; breakAfter?: string[]; paragraphs: string[] }[];
 }
 
 export const yangtzeDeltaPage: ResidencePage = {
@@ -90,8 +90,9 @@ export const henanProvincePage: ResidencePage = {
   quotationBackground: '/images/residences/henan-quotation-background.webp',
   sections: [{
     title: '河南省',
+    subtitle: '正如同河南一贯带给人的印象，一篇描写河南生活的小文，标题就是河南省。',
+    breakAfter: ['也不是3026年。', '还是要到2026年。', '只会觉得你排外和势利眼。', '屋里吃猪脚饭。', '路也生生不息。'],
     paragraphs: [
-      '正如同河南一贯带给人的印象，一篇描写河南生活的小文，标题就是河南省。',
       '对于每一个我所居住过的地方，我都会用一句恰当的引言作为分隔带。当我写到河南的时候，便想当然地从那些古诗词中寻找，毕竟：',
       '“河南省，中华文明的主要发源地。”',
       '是我写在第一句的东西。',
